@@ -1,0 +1,34 @@
+-- runtime/lsd.cf
+-- Deliberately loud runtime demo: every bound semantic type starts at a
+-- different hue and then walks around the colour wheel.
+local hl = require("cf.hl.setup")
+local color = require("cf.color")
+local c = hl.colors
+local r = hl.runtime
+
+local tick = 40
+local phase_count = 22
+local degrees_per_frame = 3
+
+function r.colorfade(style, ctx)
+	local shift = (ctx.frame * degrees_per_frame) % 360
+	if style.fg ~= nil then
+		style.fg = color.shiftHue(style.fg, shift)
+	end
+	if style.ctermfg ~= nil then
+		style.ctermfg = color.to_cterm(color.shiftHue(color.from_cterm(style.ctermfg), shift))
+	end
+	return style
+end
+
+local groups = {}
+for i = 1, phase_count do
+	local start = color.shiftHue(c.red, ((i - 1) * 360) / phase_count)
+	groups[i] = r:group(("colorfade_%02d"):format(i), {
+		fg = start,
+		ctermfg = color.to_cterm(start),
+		pipeline = { r:func("colorfade")[tick] },
+	})
+end
+
+return r.setup(groups)

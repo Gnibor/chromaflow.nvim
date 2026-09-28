@@ -1,0 +1,131 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local u = hl.ui
+
+return u.setup({
+	u:group("Normal", { fg = c.fg, bg = c.bg }),
+	u:group("NormalNC", { link = "Normal" }),
+	u:group("NormalFloat", { fg = c.fg, bg = c.line }),
+	u:group("FloatBorder", { fg = c.border, bg = c.line }),
+	u:group("FloatTitle", { fg = c.orange, bg = c.line, bold = true }),
+
+	u:group("CursorLine", { bg = c.line }),
+	u:group("CursorColumn", { link = "CursorLine" }),
+	u:group("ColorColumn", { bg = c.line_alt }),
+	u:group("Visual", { bg = c.selection }),
+	u:group("VisualNOS", { bg = c.selection_soft }),
+	u:group("MatchParen", { fg = c.yellow, bg = c.selection_soft, bold = true }),
+
+	u:group("LineNr", { fg = c.muted, bg = c.bg }),
+	u:group("CursorLineNr", { fg = c.orange, bg = c.line, bold = true }),
+	u:group("LineNrAbove", { link = "LineNr" }),
+	u:group("LineNrBelow", { link = "LineNr" }),
+	u:group("SignColumn", { bg = c.bg }),
+	u:group("FoldColumn", { fg = c.muted, bg = c.bg }),
+	u:group("Folded", { fg = c.comment, bg = c.line }),
+
+	u:group("StatusLine", { fg = c.fg, bg = c.line_alt }),
+	u:group("StatusLineNC", { fg = c.muted, bg = c.line }),
+	u:group("WinSeparator", { fg = c.border, bg = c.bg }),
+	u:group("VertSplit", { link = "WinSeparator" }),
+	u:group("WinBar", { fg = c.fg, bg = c.bg, bold = true }),
+	u:group("WinBarNC", { fg = c.muted, bg = c.bg }),
+
+	u:group("TabLine", { fg = c.muted, bg = c.line }),
+	u:group("TabLineFill", { bg = c.bg }),
+	u:group("TabLineSel", { fg = c.fg, bg = c.selection_soft, bold = true }),
+
+	u:group("Pmenu", { fg = c.fg, bg = c.line }),
+	u:group("PmenuSel", { fg = c.fg, bg = c.selection, bold = true }),
+	u:group("PmenuSbar", { bg = c.line_alt }),
+	u:group("PmenuThumb", { bg = c.border }),
+	u:group("PmenuMatch", { fg = c.orange, bold = true }),
+	u:group("PmenuMatchSel", { fg = c.yellow, bg = c.selection, bold = true }),
+	u:group("PmenuKind", { fg = c.cyan }),
+	u:group("PmenuKindSel", { fg = c.cyan, bg = c.selection }),
+	u:group("PmenuExtra", { fg = c.muted }),
+	u:group("PmenuExtraSel", { fg = c.comment, bg = c.selection }),
+
+	u:group("Search", { fg = c.black, bg = c.yellow }),
+	u:group("IncSearch", { fg = c.black, bg = c.orange, bold = true }),
+	u:group("CurSearch", { link = "IncSearch" }),
+	u:group("Substitute", { fg = c.black, bg = c.magenta }),
+	u:group("QuickFixLine", { bg = c.selection_soft }),
+
+	u:group("Directory", { fg = c.blue }),
+	u:group("Title", { fg = c.orange, bold = true }),
+	u:group("Question", { fg = c.green }),
+	u:group("MoreMsg", { fg = c.green }),
+	u:group("ModeMsg", { fg = c.cyan, bold = true }),
+	u:group("WarningMsg", { fg = c.yellow }),
+	u:group("ErrorMsg", { fg = c.red, bold = true }),
+	u:group("MsgArea", { fg = c.fg, bg = c.bg }),
+	u:group("MsgSeparator", { fg = c.border, bg = c.line }),
+
+	u:group("NonText", { fg = c.muted }),
+	u:group("Whitespace", { fg = c.line_alt }),
+	u:group("SpecialKey", { fg = c.muted }),
+	u:group("EndOfBuffer", { fg = c.bg }),
+	u:group("Conceal", { fg = c.comment }),
+
+	u:group("SpellBad", { sp = c.red, undercurl = true }),
+	u:group("SpellCap", { sp = c.blue, undercurl = true }),
+	u:group("SpellRare", { sp = c.magenta, undercurl = true }),
+	u:group("SpellLocal", { sp = c.cyan, undercurl = true }),
+
+	u:group("DiagnosticError", { fg = c.red }),
+	u:group("DiagnosticWarn", { fg = c.yellow }),
+	u:group("DiagnosticInfo", { fg = c.blue }),
+	u:group("DiagnosticHint", { fg = c.cyan }),
+	u:group("DiagnosticOk", { fg = c.green }),
+	u:group("DiagnosticUnderlineError", { sp = c.red, undercurl = true }),
+	u:group("DiagnosticUnderlineWarn", { sp = c.yellow, undercurl = true }),
+	u:group("DiagnosticUnderlineInfo", { sp = c.blue, undercurl = true }),
+	u:group("DiagnosticUnderlineHint", { sp = c.cyan, undercurl = true }),
+	u:group("DiagnosticUnderlineOk", { sp = c.green, undercurl = true }),
+	u:group("DiagnosticDeprecated", { sp = c.red, strikethrough = true }),
+	u:group("DiagnosticUnnecessary", {
+		fg = c.comment,
+		pipeline = { hl.opacity.fg(60) },
+	}),
+
+	u:group("LspReferenceText", {
+		bg = c.blue,
+		pipeline = { hl.opacity.bg(10) },
+	}),
+	u:group("LspReferenceRead", {
+		bg = c.green,
+		pipeline = { hl.opacity.bg(10) },
+	}),
+	u:group("LspReferenceWrite", {
+		bg = c.orange,
+		pipeline = { hl.opacity.bg(12) },
+	}),
+	u:group("LspInlayHint", { fg = c.muted, italic = true }),
+	u:group("LspCodeLens", { fg = c.comment, italic = true }),
+	u:group("LspCodeLensSeparator", { fg = c.muted }),
+	u:group("LspSignatureActiveParameter", { fg = c.orange, bold = true }),
+
+	u:group("DiffAdd", {
+		fg = c.green, bg = c.green,
+		pipeline = { hl.opacity.bg(10) },
+	}),
+	u:group("DiffChange", {
+		fg = c.yellow, bg = c.yellow,
+		pipeline = { hl.opacity.bg(9) },
+	}),
+	u:group("DiffDelete", {
+		fg = c.red, bg = c.red,
+		pipeline = { hl.opacity.bg(10) },
+	}),
+	u:group("DiffText", {
+		fg = c.orange, bg = c.orange, bold = true,
+		pipeline = { hl.opacity.bg(18) },
+	}),
+	u:group("Added", { fg = c.green }),
+	u:group("Changed", { fg = c.yellow }),
+	u:group("Removed", { fg = c.red }),
+
+	u:group("TermCursor", { fg = c.bg, bg = c.fg }),
+	u:group("TermCursorNC", { fg = c.bg, bg = c.muted }),
+})

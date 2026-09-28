@@ -1,0 +1,24 @@
+-- runtime/panic.cf
+-- Stateful runtime function + timed re-evaluation demo.
+local hl = require("cf.hl.setup")
+local r = hl.runtime
+
+function r.alert(style, ctx)
+	if ctx.frame % 2 == 0 then
+		style.fg = hl.colors.red
+		style.bold = true
+		style.dim = false
+	else
+		style.bold = false
+		style.dim = true
+	end
+	return style
+end
+
+return r.setup({
+	r:group("panic_blink", {
+		pipeline = {
+			r:func("alert")[300],
+		},
+	}),
+})

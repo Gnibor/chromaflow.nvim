@@ -1,0 +1,27 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+return p.setup("nvim-cmp", {
+	style_targets = { vim = true, ts = false, lsp = false },
+	p:group("CmpItemAbbr", { fg = c.fg }),
+	p:group("CmpItemAbbrDeprecated", { fg = c.muted, strikethrough = true }),
+	p:group("CmpItemAbbrMatch", { fg = c.orange, bold = true, types = { "CmpItemAbbrMatchFuzzy" } }),
+	p:group("CmpItemKind", { fg = c.cyan, types = { "CmpItemKindIcon" } }),
+	p:group("CmpItemMenu", { fg = c.comment, italic = true }),
+	p:group("CmpItemKindText", { fg = c.fg }),
+	p:group("CmpItemKindMethod", { fg = c.func, types = { "CmpItemKindFunction", "CmpItemKindConstructor" } }),
+	p:group("CmpItemKindField", { fg = c.property, types = { "CmpItemKindProperty" } }),
+	p:group("CmpItemKindVariable", { fg = c.variable }),
+	p:group("CmpItemKindClass", { fg = c.type, types = { "CmpItemKindInterface", "CmpItemKindStruct", "CmpItemKindTypeParameter" } }),
+	p:group("CmpItemKindModule", { fg = c.blue }),
+	p:group("CmpItemKindUnit", { fg = c.number, types = { "CmpItemKindValue", "CmpItemKindNumber", "CmpItemKindEnumMember" } }),
+	p:group("CmpItemKindKeyword", { fg = c.keyword }),
+	p:group("CmpItemKindSnippet", { fg = c.magenta }),
+	p:group("CmpItemKindColor", { fg = c.yellow }),
+	p:group("CmpItemKindFile", { fg = c.blue, types = { "CmpItemKindFolder", "CmpItemKindReference" } }),
+	p:group("CmpItemKindOperator", { fg = c.operator }),
+	p:group("CmpItemKindEvent", { fg = c.orange }),
+	p:group("CmpItemKindEnum", { fg = c.type }),
+	p:group("CmpItemKindConstant", { fg = c.constant }),
+})

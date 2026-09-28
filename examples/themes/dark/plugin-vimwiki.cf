@@ -1,0 +1,28 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+return p.setup("vimwiki", {
+	style_targets = { vim = true, ts = false, lsp = false },
+	p:group("VimwikiHeader1", { fg = c.func, bold = true }),
+	p:group("VimwikiHeader2", { fg = c.type, bold = true }),
+	p:group("VimwikiHeader3", { fg = c.keyword, bold = true }),
+	p:group("VimwikiHeader4", { fg = c.fg, bold = true }),
+	p:group("VimwikiHeader5", { fg = c.fg, bold = true }),
+	p:group("VimwikiHeader6", { fg = c.comment, bold = true }),
+	p:group("VimwikiLink", { fg = c.blue, underline = true }),
+	p:group("VimwikiWikiLink", { fg = c.cyan, underline = true }),
+	p:group("VimwikiLinkT", { fg = c.cyan }),
+	p:group("VimwikiUrl", { fg = c.blue, underline = true }),
+	p:group("VimwikiTag", { fg = c.magenta }),
+	p:group("VimwikiCode", { fg = c.string, bg = c.line }),
+	p:group("VimwikiPre", { fg = c.string, bg = c.line }),
+	p:group("VimwikiBold", { bold = true }),
+	p:group("VimwikiItalic", { italic = true }),
+	p:group("VimwikiDelText", { strikethrough = true }),
+	p:group("VimwikiList", { fg = c.orange }),
+	p:group("VimwikiListTodo", { fg = c.yellow }),
+	p:group("VimwikiCheckBoxDone", { fg = c.green }),
+	p:group("VimwikiHR", { fg = c.border }),
+	p:group("VimwikiPlaceholder", { fg = c.comment, italic = true }),
+})

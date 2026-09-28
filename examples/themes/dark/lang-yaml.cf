@@ -1,0 +1,23 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local l = hl.language
+
+return l.setup("yaml", {
+	l:group("comment", { fg = c.comment, italic = true }),
+	l:group("string", { fg = c.string }),
+	l:group("number", { fg = c.number }),
+	l:group("boolean", { fg = c.number, bold = true }),
+	l:group("property", { fg = c.property }),
+	l:group("constant", { fg = c.constant }),
+	l:group("keyword", { fg = c.keyword }),
+	l:group("property", { style_targets = { vim = false, ts = true, lsp = false }, fg = c.property }),
+	l:group("label", { style_targets = { vim = false, ts = true, lsp = false }, fg = c.orange }),
+	l:group("punctuation", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			["special"] = { fg = c.cyan },
+			["delimiter"] = { fg = c.muted },
+		},
+	}),
+
+})

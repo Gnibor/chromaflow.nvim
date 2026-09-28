@@ -1,0 +1,34 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+return p.setup("neogit", {
+	style_targets = { vim = true, ts = false, lsp = false },
+	p:group("NeogitNormal", { fg = c.fg, bg = c.bg }),
+	p:group("NeogitStatusHEAD", { fg = c.orange, bold = true }),
+	p:group("NeogitBranch", { fg = c.magenta, bold = true }),
+	p:group("NeogitRemote", { fg = c.cyan }),
+	p:group("NeogitSectionHeader", { fg = c.orange, bold = true }),
+	p:group("NeogitSectionHeaderCount", { fg = c.muted }),
+	p:group("NeogitChangeModified", { fg = c.yellow }),
+	p:group("NeogitChangeAdded", { fg = c.green, types = { "NeogitChangeNewFile" } }),
+	p:group("NeogitChangeDeleted", { fg = c.red }),
+	p:group("NeogitChangeRenamed", { fg = c.cyan }),
+	p:group("NeogitChangeUpdated", { fg = c.blue }),
+	p:group("NeogitChangeCopied", { fg = c.cyan }),
+	p:group("NeogitChangeUnmerged", { fg = c.magenta }),
+	p:group("NeogitHunkHeader", { fg = c.orange, bg = c.line_alt, bold = true }),
+	p:group("NeogitDiffHeader", { fg = c.cyan, bg = c.line }),
+	p:group("NeogitDiffContext", { fg = c.comment }),
+	p:group("NeogitDiffAdd", { fg = c.green, bg = c.green, pipeline = { hl.opacity.bg(8) } }),
+	p:group("NeogitDiffDelete", { fg = c.red, bg = c.red, pipeline = { hl.opacity.bg(8) } }),
+	p:group("NeogitActiveItem", { bg = c.selection_soft }),
+	p:group("NeogitCursorLine", { link = "CursorLine" }),
+	p:group("NeogitPopupSectionTitle", { fg = c.orange, bold = true }),
+	p:group("NeogitPopupBranchName", { fg = c.magenta }),
+	p:group("NeogitPopupBold", { bold = true }),
+	p:group("NeogitPopupSwitchEnabled", { fg = c.green }),
+	p:group("NeogitPopupSwitchDisabled", { fg = c.muted }),
+	p:group("NeogitPopupOptionEnabled", { fg = c.cyan }),
+	p:group("NeogitPopupOptionDisabled", { fg = c.muted }),
+})

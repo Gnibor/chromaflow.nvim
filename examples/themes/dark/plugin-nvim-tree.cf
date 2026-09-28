@@ -1,0 +1,38 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+return p.setup("nvim-tree", {
+	style_targets = { vim = true, ts = false, lsp = false },
+	p:group("NvimTreeNormal", { fg = c.fg, bg = c.bg }),
+	p:group("NvimTreeNormalNC", { link = "NvimTreeNormal" }),
+	p:group("NvimTreeNormalFloat", { fg = c.fg, bg = c.line }),
+	p:group("NvimTreeWinSeparator", { link = "WinSeparator" }),
+	p:group("NvimTreeEndOfBuffer", { link = "EndOfBuffer" }),
+	p:group("NvimTreeLineNr", { link = "LineNr" }),
+	p:group("NvimTreeCursorLine", { link = "CursorLine" }),
+	p:group("NvimTreeCursorLineNr", { link = "CursorLineNr" }),
+	p:group("NvimTreeSignColumn", { link = "SignColumn" }),
+	p:group("NvimTreeStatusLine", { link = "StatusLine" }),
+	p:group("NvimTreeFolderName", { fg = c.blue }),
+	p:group("NvimTreeOpenedFolderName", { fg = c.cyan, bold = true }),
+	p:group("NvimTreeEmptyFolderName", { fg = c.muted }),
+	p:group("NvimTreeFolderIcon", { fg = c.blue }),
+	p:group("NvimTreeOpenedFolderIcon", { fg = c.cyan }),
+	p:group("NvimTreeRootFolder", { fg = c.orange, bold = true }),
+	p:group("NvimTreeSymlink", { fg = c.cyan, underline = true }),
+	p:group("NvimTreeExecFile", { fg = c.green, bold = true }),
+	p:group("NvimTreeSpecialFile", { fg = c.magenta }),
+	p:group("NvimTreeImageFile", { fg = c.yellow }),
+	p:group("NvimTreeGitDirty", { fg = c.yellow }),
+	p:group("NvimTreeGitStaged", { fg = c.green }),
+	p:group("NvimTreeGitMerge", { fg = c.magenta }),
+	p:group("NvimTreeGitRenamed", { fg = c.cyan }),
+	p:group("NvimTreeGitNew", { fg = c.green }),
+	p:group("NvimTreeGitDeleted", { fg = c.red }),
+	p:group("NvimTreeGitIgnored", { fg = c.muted }),
+	p:group("NvimTreeModifiedFile", { fg = c.yellow }),
+	p:group("NvimTreeOpenedFile", { fg = c.orange }),
+	p:group("NvimTreeHiddenDisplay", { fg = c.muted }),
+	p:group("NvimTreeWindowPicker", { fg = c.black, bg = c.orange, bold = true }),
+})

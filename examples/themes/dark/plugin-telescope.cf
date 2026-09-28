@@ -1,0 +1,24 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+return p.setup("telescope", {
+	style_targets = { vim = true, ts = false, lsp = false },
+	p:group("TelescopeNormal", { fg = c.fg, bg = c.line }),
+	p:group("TelescopeBorder", { fg = c.border, bg = c.line }),
+	p:group("TelescopeTitle", { fg = c.orange, bg = c.line, bold = true }),
+	p:group("TelescopePromptNormal", { fg = c.fg, bg = c.line_alt }),
+	p:group("TelescopePromptBorder", { fg = c.orange, bg = c.line_alt }),
+	p:group("TelescopePromptTitle", { fg = c.black, bg = c.orange, bold = true }),
+	p:group("TelescopeResultsNormal", { link = "TelescopeNormal" }),
+	p:group("TelescopeResultsBorder", { link = "TelescopeBorder" }),
+	p:group("TelescopeResultsTitle", { fg = c.cyan, bg = c.line, bold = true }),
+	p:group("TelescopePreviewNormal", { link = "TelescopeNormal" }),
+	p:group("TelescopePreviewBorder", { link = "TelescopeBorder" }),
+	p:group("TelescopePreviewTitle", { fg = c.green, bg = c.line, bold = true }),
+	p:group("TelescopeSelection", { fg = c.fg, bg = c.selection, bold = true }),
+	p:group("TelescopeSelectionCaret", { fg = c.orange, bg = c.selection, bold = true }),
+	p:group("TelescopeMultiSelection", { fg = c.magenta, bold = true }),
+	p:group("TelescopeMatching", { fg = c.orange, bold = true }),
+	p:group("TelescopePromptPrefix", { fg = c.cyan }),
+})

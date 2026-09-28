@@ -1,0 +1,18 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+return p.setup("git-ui", {
+	style_targets = { vim = true, ts = false, lsp = false },
+	p:group("gitcommitSummary", { fg = c.fg, bold = true }),
+	p:group("gitcommitComment", { fg = c.comment, italic = true }),
+	p:group("gitcommitHash", { fg = c.magenta }),
+	p:group("gitcommitBranch", { fg = c.cyan }),
+	p:group("gitcommitSelectedType", { fg = c.green }),
+	p:group("gitcommitDiscardedType", { fg = c.red }),
+	p:group("gitcommitUntrackedFile", { fg = c.cyan }),
+	p:group("gitcommitSelectedFile", { fg = c.green }),
+	p:group("gitcommitDiscardedFile", { fg = c.red }),
+	p:group("fugitiveHash", { fg = c.magenta }),
+	p:group("fugitiveHeader", { fg = c.orange, bold = true }),
+})

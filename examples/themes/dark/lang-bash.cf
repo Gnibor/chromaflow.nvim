@@ -1,0 +1,26 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local l = hl.language
+
+return l.setup("bash", {
+	l:group("comment", { fg = c.comment, italic = true }),
+	l:group("string", { fg = c.string }),
+	l:group("number", { fg = c.number }),
+	l:group("variable", { fg = c.variable, typemods = { builtin = { pipeline = { hl.mix.fg(24, c.builtin) } } } }),
+	l:group("parameter", { fg = c.parameter }),
+	l:group("function", { fg = c.func, typemods = { builtin = { pipeline = { hl.mix.fg(22, c.yellow) } } } }),
+	l:group("keyword", { fg = c.keyword }),
+	l:group("operator", { fg = c.operator }),
+	l:group("string", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			["special.path"] = { fg = c.cyan },
+		},
+	}),
+	l:group("punctuation", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			["bracket"] = { fg = c.muted },
+		},
+	}),
+})

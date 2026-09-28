@@ -1,0 +1,8 @@
+local hl = require("cf.hl.setup")
+local p = hl.plugin
+
+-- project-manager.nvim intentionally renders through core groups such as
+-- Normal, Title, Directory, TabLine/TabLineSel and Visual. Registering the
+-- plugin here marks it as deliberately covered by this theme without creating
+-- redundant plugin-specific highlight groups.
+return p.setup("project-manager", {})

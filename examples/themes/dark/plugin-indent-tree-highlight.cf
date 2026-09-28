@@ -1,0 +1,10 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+return p.setup("indent-tree-highlight", {
+	style_targets = { vim = true, ts = false, lsp = false },
+	p:group("ITHNormal", { fg = c.muted }),
+	p:group("ITHActive", { fg = c.cyan, bold = true }),
+	p:group("ITHWarn", { fg = c.red, bold = true }),
+})

@@ -1,0 +1,22 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+return p.setup("snacks", {
+	style_targets = { vim = true, ts = false, lsp = false },
+	p:group("SnacksInputNormal", { fg = c.fg, bg = c.line }),
+	p:group("SnacksInputBorder", { fg = c.orange, bg = c.line }),
+	p:group("SnacksInputTitle", { fg = c.orange, bg = c.line, bold = true }),
+	p:group("SnacksPicker", { fg = c.fg, bg = c.line }),
+	p:group("SnacksPickerBorder", { fg = c.border, bg = c.line }),
+	p:group("SnacksPickerTitle", { fg = c.orange, bg = c.line, bold = true }),
+	p:group("SnacksPickerPrompt", { fg = c.cyan }),
+	p:group("SnacksPickerMatch", { fg = c.orange, bold = true }),
+	p:group("SnacksPickerDir", { fg = c.comment }),
+	p:group("SnacksPickerListCursorLine", { bg = c.selection_soft }),
+	p:group("SnacksPickerSelected", { fg = c.magenta }),
+	p:group("SnacksPickerTotals", { fg = c.muted }),
+	p:group("SnacksPickerDimmed", { fg = c.muted }),
+	p:group("SnacksNotifierHistory", { fg = c.fg, bg = c.line }),
+	p:group("SnacksDashboardNormal", { fg = c.fg, bg = c.bg }),
+})

@@ -1,0 +1,16 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+-- Active plugin identity replacement. Other dark plugin modules still fall
+-- back normally, while the default codemap module is skipped completely.
+return p.setup("codemap", {
+	style_targets = { ts = true },
+	p:group("CodeMap", {
+		typemods = {
+			keyword = { fg = c.yellow, bold = true },
+			entry = { fg = c.cyan },
+			fallback_probe = { fg = c.red, italic = true },
+		},
+	}),
+})

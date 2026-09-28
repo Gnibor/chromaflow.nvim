@@ -1,0 +1,4 @@
+---@type CFThemeConfig
+return {
+	only_style_target = "ts",
+}

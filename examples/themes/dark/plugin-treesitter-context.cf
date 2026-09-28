@@ -1,0 +1,13 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+return p.setup("treesitter-context", {
+
+	style_targets = { vim = true, ts = false, lsp = false },
+	p:group("TreesitterContext", { fg = c.fg, bg = c.line, }),
+	p:group("TreesitterContextLineNumber", { fg = c.muted, bg = c.line }),
+	p:group("TreesitterContextSeparator", { fg = c.border, bg = c.line }),
+	p:group("TreesitterContextBottom", { sp = c.border, underline = true }),
+	p:group("TreesitterContextLineNumberBottom", { sp = c.border, underline = true }),
+})

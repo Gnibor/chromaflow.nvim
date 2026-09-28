@@ -1,0 +1,26 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local l = hl.language
+
+return l.setup("markdown", {
+	l:group("comment", { fg = c.comment, italic = true }),
+	l:group("string", { fg = c.string }),
+	l:group("keyword", { fg = c.keyword }),
+
+	l:group("markup", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			["heading"] = { fg = c.func, bold = true },
+			["heading.1"] = { fg = c.func, bold = true },
+			["heading.2"] = { fg = c.type, bold = true },
+			["heading.3"] = { fg = c.keyword, bold = true },
+			["heading.4"] = { fg = c.fg, bold = true },
+			["heading.5"] = { fg = c.fg, bold = true },
+			["heading.6"] = { fg = c.comment, bold = true },
+			["raw.block"] = { fg = c.string, bg = c.line },
+			["quote"] = { fg = c.comment, italic = true },
+			["list"] = { fg = c.func },
+		},
+	}),
+
+})

@@ -1,0 +1,120 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local l = hl.language
+
+-- Filetype variants are derived by the resolver, never spelled as raw names.
+return l.setup("lua", {
+	mods = { deprecated = { strikethrough = true } },
+
+	l:group("comment", {
+		fg = c.comment, italic = true,
+		typemods = { documentation = { pipeline = { hl.lighten.fg(8) } } },
+	}),
+	l:group("string", {
+		fg = c.string,
+		typemods = {
+			documentation = { fg = c.comment, italic = true },
+		},
+	}),
+	l:group("number", { fg = c.number }),
+	l:group("boolean", { fg = c.number }),
+	l:group("constant", {
+		fg = c.constant,
+		typemods = {
+			readonly = { fg = c.constant },
+			builtin = { pipeline = { hl.mix.fg(18, c.type) } },
+		},
+	}),
+	l:group("variable", {
+		fg = c.variable,
+		typemods = {
+			readonly = {
+				bg = c.constant,
+				pipeline = { hl.mix.fg(45, c.constant), hl.opacity.bg(5) },
+			},
+			builtin = { pipeline = { hl.mix.fg(24, c.builtin) } },
+			static = { italic = true, pipeline = { hl.mix.fg(12, c.type) } },
+		},
+	}),
+	l:group("parameter", {
+		fg = c.parameter,
+		typemods = {
+			readonly = { italic = true, pipeline = { hl.mix.fg(18, c.constant) } },
+		},
+	}),
+	l:group("property", {
+		fg = c.property,
+		typemods = {
+			readonly = { pipeline = { hl.mix.fg(24, c.constant) } },
+			static = { italic = true, pipeline = { hl.mix.fg(18, c.type) } },
+			builtin = { pipeline = { hl.mix.fg(15, c.builtin) } },
+		},
+	}),
+	l:group("function", {
+		fg = c.func,
+		types = { "method" },
+		pipeline = {
+			hl.shiftHue.fg(-5),
+			hl.brightness.fg(20),
+		},
+		typemods = {
+			builtin = { pipeline = { hl.mix.fg(22, c.yellow) } },
+			static = { italic = true, pipeline = { hl.mix.fg(16, c.constant) } },
+			async = { italic = true, pipeline = { hl.mix.fg(20, c.type) } },
+			declaration = { bold = true },
+			definition = { bold = true },
+			abstract = { italic = true, pipeline = { hl.opacity.fg(85) } },
+		},
+	}),
+	l:group("type", {
+		fg = c.type,
+		types = { "class", "struct", "enum", "interface" },
+		typemods = {
+			builtin = { pipeline = { hl.mix.fg(25, c.builtin) } },
+			declaration = { bold = true },
+			definition = { bold = true },
+			abstract = { italic = true, pipeline = { hl.opacity.fg(85) } },
+		},
+	}),
+	l:group("typeparameter", { fg = c.type, italic = true }),
+	l:group("enummember", { fg = c.constant }),
+	l:group("namespace", {
+		fg = c.type,
+		pipeline = { hl.darken.fg(8) },
+		typemods = { builtin = { pipeline = { hl.mix.fg(15, c.builtin) } } },
+	}),
+	l:group("keyword", { fg = c.keyword ,   pipeline = {
+			hl.mix.fg(18, c.constant),
+		}}),
+	l:group("modifier", { fg = c.keyword }),
+	l:group("operator", { fg = c.operator }),
+	l:group("keyword", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			["function"] = { fg = c.keyword, bold = true },
+			["return"] = { fg = c.keyword },
+			["operator"] = { fg = c.operator },
+		},
+	}),
+	l:group("punctuation", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			["bracket"] = { fg = c.muted },
+			["delimiter"] = { fg = c.muted },
+			["special"] = { fg = c.operator },
+		},
+	}),
+	l:group("variable", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			["member"] = { fg = c.property },
+		},
+	}),
+	l:group("constructor", { style_targets = { vim = false, ts = true, lsp = false }, fg = c.type }),
+	l:group("string", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			escape = { fg = c.string, pipeline = { hl.mix.fg(35, c.operator) } },
+		},
+	}),
+})

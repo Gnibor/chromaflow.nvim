@@ -1,0 +1,22 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+return p.setup("gitsigns", {
+	style_targets = { vim = true, ts = false, lsp = false },
+	p:group("GitSignsAdd", { fg = c.green, types = { "GitSignsAddNr", "GitSignsAddCul", "GitSignsStagedAdd", "GitSignsStagedAddNr", "GitSignsStagedAddCul" } }),
+	p:group("GitSignsChange", { fg = c.yellow, types = { "GitSignsChangeNr", "GitSignsChangeCul", "GitSignsChangeDelete", "GitSignsChangeDeleteNr", "GitSignsChangeDeleteCul", "GitSignsStagedChange", "GitSignsStagedChangeNr", "GitSignsStagedChangeCul" } }),
+	p:group("GitSignsDelete", { fg = c.red, types = { "GitSignsDeleteNr", "GitSignsDeleteCul", "GitSignsTopdelete", "GitSignsTopdeleteNr", "GitSignsTopdeleteCul", "GitSignsStagedDelete", "GitSignsStagedDeleteNr", "GitSignsStagedDeleteCul" } }),
+	p:group("GitSignsUntracked", { fg = c.cyan, types = { "GitSignsUntrackedNr", "GitSignsUntrackedCul", "GitSignsStagedUntracked", "GitSignsStagedUntrackedNr", "GitSignsStagedUntrackedCul" } }),
+	p:group("GitSignsAddLn", { bg = c.green, pipeline = { hl.opacity.bg(8) } }),
+	p:group("GitSignsChangeLn", { bg = c.yellow, pipeline = { hl.opacity.bg(8) } }),
+	p:group("GitSignsUntrackedLn", { bg = c.cyan, pipeline = { hl.opacity.bg(7) } }),
+	p:group("GitSignsAddPreview", { link = "DiffAdd" }),
+	p:group("GitSignsDeletePreview", { link = "DiffDelete" }),
+	p:group("GitSignsNoEOLPreview", { fg = c.constant }),
+	p:group("GitSignsCurrentLineBlame", { fg = c.muted, italic = true }),
+	p:group("GitSignsAddInline", { fg = c.green, bg = c.green, pipeline = { hl.opacity.bg(18) } }),
+	p:group("GitSignsChangeInline", { fg = c.yellow, bg = c.yellow, pipeline = { hl.opacity.bg(18) } }),
+	p:group("GitSignsDeleteInline", { fg = c.red, bg = c.red, pipeline = { hl.opacity.bg(18) } }),
+	p:group("GitSignsDeleteVirtLn", { fg = c.red, bg = c.red, pipeline = { hl.opacity.bg(8) } }),
+})

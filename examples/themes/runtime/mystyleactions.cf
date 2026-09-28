@@ -1,0 +1,13 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local r = hl.runtime
+
+return r.setup({
+	r:group("dim", {
+		pipeline = { hl.brightness.fg(-20) },
+	}),
+	r:group("focus", {
+		fg = c.orange,
+		bold = true,
+	}),
+})

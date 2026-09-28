@@ -1,0 +1,30 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+return p.setup("diffview", {
+	style_targets = { vim = true, ts = false, lsp = false },
+	p:group("DiffviewNormal", { fg = c.fg, bg = c.bg }),
+	p:group("DiffviewCursorLine", { link = "CursorLine" }),
+	p:group("DiffviewEndOfBuffer", { link = "EndOfBuffer" }),
+	p:group("DiffviewSignColumn", { link = "SignColumn" }),
+	p:group("DiffviewFilePanelTitle", { fg = c.orange, bold = true }),
+	p:group("DiffviewFilePanelCounter", { fg = c.muted }),
+	p:group("DiffviewFilePanelFileName", { fg = c.fg }),
+	p:group("DiffviewFolderName", { fg = c.blue }),
+	p:group("DiffviewFolderSign", { fg = c.cyan }),
+	p:group("DiffviewStatusAdded", { fg = c.green }),
+	p:group("DiffviewStatusModified", { fg = c.yellow }),
+	p:group("DiffviewStatusRenamed", { fg = c.cyan }),
+	p:group("DiffviewStatusCopied", { fg = c.cyan }),
+	p:group("DiffviewStatusDeleted", { fg = c.red }),
+	p:group("DiffviewStatusUntracked", { fg = c.cyan }),
+	p:group("DiffviewStatusIgnored", { fg = c.muted }),
+	p:group("DiffviewStatusUnknown", { fg = c.magenta }),
+	p:group("DiffviewStatusBroken", { fg = c.red, bold = true }),
+	p:group("DiffviewHash", { fg = c.magenta }),
+	p:group("DiffviewReference", { fg = c.cyan }),
+	p:group("DiffviewPrimary", { fg = c.orange, bold = true }),
+	p:group("DiffviewSecondary", { fg = c.blue }),
+	p:group("DiffviewDim1", { fg = c.comment }),
+})

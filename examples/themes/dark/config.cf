@@ -1,0 +1,8 @@
+---@type CFThemeConfig
+return {
+	style_targets = {
+		vim = true,
+		ts = true,
+		lsp = true,
+	},
+}

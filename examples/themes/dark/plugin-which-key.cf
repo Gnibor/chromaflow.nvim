@@ -1,0 +1,25 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local p = hl.plugin
+
+return p.setup("which-key", {
+	style_targets = { vim = true, ts = false, lsp = false },
+	p:group("WhichKeyNormal", { fg = c.fg, bg = c.line }),
+	p:group("WhichKeyBorder", { fg = c.border, bg = c.line }),
+	p:group("WhichKeyTitle", { fg = c.orange, bg = c.line, bold = true }),
+	p:group("WhichKey", { fg = c.func, bold = true }),
+	p:group("WhichKeyDesc", { fg = c.fg }),
+	p:group("WhichKeyGroup", { fg = c.keyword, bold = true }),
+	p:group("WhichKeySeparator", { fg = c.muted }),
+	p:group("WhichKeyValue", { fg = c.comment }),
+	p:group("WhichKeyIcon", { fg = c.cyan }),
+	p:group("WhichKeyIconAzure", { fg = c.cyan }),
+	p:group("WhichKeyIconBlue", { fg = c.blue }),
+	p:group("WhichKeyIconCyan", { fg = c.cyan }),
+	p:group("WhichKeyIconGreen", { fg = c.green }),
+	p:group("WhichKeyIconGrey", { fg = c.muted }),
+	p:group("WhichKeyIconOrange", { fg = c.orange }),
+	p:group("WhichKeyIconPurple", { fg = c.magenta }),
+	p:group("WhichKeyIconRed", { fg = c.red }),
+	p:group("WhichKeyIconYellow", { fg = c.yellow }),
+})

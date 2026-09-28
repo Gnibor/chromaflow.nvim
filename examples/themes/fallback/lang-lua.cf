@@ -1,0 +1,21 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local l = hl.language
+
+-- Deliberately partial language replacement. Because fallback is resolved by
+-- setup identity, this one active lua module suppresses every default lua
+-- module. Missing lua declarations therefore stay missing instead of merging
+-- file-by-file with the default theme.
+return l.setup("lua", {
+	l:group("comment", { fg = c.muted, italic = true }),
+	l:group("variable", { fg = c.cyan }),
+	l:group("function", {
+		fg = c.magenta,
+		bold = true,
+		typemods = {
+			builtin = { fg = c.orange },
+			async = { italic = true },
+		},
+	}),
+	l:group("keyword", { fg = c.yellow }),
+})

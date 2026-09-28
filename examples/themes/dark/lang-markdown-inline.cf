@@ -1,0 +1,18 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local l = hl.language
+
+-- Inline Markdown is a distinct parser language, including inside Vimwiki.
+return l.setup("markdown_inline", {
+	l:group("markup", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			["link.label"] = { fg = c.type },
+			["link.url"] = { fg = c.blue, underline = true },
+			["raw"] = { fg = c.string, bg = c.line },
+			["strong"] = { bold = true },
+			["italic"] = { italic = true },
+			["strikethrough"] = { strikethrough = true },
+		},
+	}),
+})
