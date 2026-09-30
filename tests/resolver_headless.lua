@@ -46,14 +46,15 @@ check(nil, "readonly", nil)
 check(nil, "static", nil)
 check("variable", "readonly", nil)
 
--- Unknown semantic names use the literal fallback. The resolver intentionally
--- reports one compact status; source-aware diagnostics are owned by hl.setup.
+-- Unknown types and type-owned combinations keep literal fallback. Standalone
+-- modifiers can always address Neovim's @lsp.mod.<name> form, including custom
+-- modifier names advertised by a server.
 check("MissingType", nil, "unresolved_literal")
-check(nil, "MissingMod", "unresolved_literal")
+check(nil, "MissingMod", nil)
 check("variable", "MissingMod", "unresolved_literal")
 check("MissingType", "MissingMod", "unresolved_literal")
 check("variable", { "readonly", "MissingMod", "static" }, "unresolved_literal")
-check(nil, { "readonly", "MissingMod", "static" }, "unresolved_literal")
+check(nil, { "readonly", "MissingMod", "static" }, nil)
 check("MissingType", {}, "unresolved_literal", "lua")
 
 -- Explicit typemod styles own concrete TS/LSP combinations. A concrete target
@@ -80,7 +81,7 @@ check_link("variable", "MissingMod", "MissingTarget", "unresolved_literal")
 
 assert(resolver.clear("variable", nil) == nil)
 assert(resolver.clear("MissingType", nil) == "unresolved_literal")
-assert(resolver.clear(nil, "MissingMod") == "unresolved_literal")
+assert(resolver.clear(nil, "MissingMod") == nil)
 assert(resolver.clear("variable", "MissingMod") == "unresolved_literal")
 assert(resolver.clear("MissingType", "MissingMod") == "unresolved_literal")
 
@@ -101,6 +102,28 @@ assert(#calls == 3, "filetype resolve did not materialize the three semantic lay
 assert(calls[1][1] == "luaIdentifier" and calls[1][2] == style and calls[1][3] == false)
 assert(calls[2][1] == "@variable.lua" and calls[2][2] == "luaIdentifier" and calls[2][3] == true)
 assert(calls[3][1] == "@lsp.type.variable.lua" and calls[3][2] == "@variable.lua" and calls[3][3] == true)
+
+-- A custom LSP modifier needs no pre-existing highlight group. Tree-sitter is
+-- written only when its standalone capture already exists in the catalog.
+calls = {}
+resolver.resolve(nil, "functionScope", style, "c", { vim = false, ts = true, lsp = true })
+assert(#calls == 1 and calls[1][1] == "@lsp.mod.functionScope.c" and calls[1][2] == style)
+assert(vim.deep_equal(
+	resolver.runtime_style_names(nil, "functionScope", "c", { vim = false, ts = true, lsp = true }),
+	{ "@lsp.mod.functionScope.c" }
+))
+
+catalog["@functionscope"] = "@functionScope"
+resolver.clear_cache()
+setup(true)
+calls = {}
+resolver.resolve(nil, "functionScope", style, "c", { vim = false, ts = true, lsp = true })
+assert(#calls == 2)
+assert(calls[1][1] == "@functionScope.c" and calls[1][2] == style and calls[1][3] == false)
+assert(calls[2][1] == "@lsp.mod.functionScope.c" and calls[2][2] == "@functionScope.c" and calls[2][3] == true)
+catalog["@functionscope"] = nil
+resolver.clear_cache()
+setup(true)
 
 -- Multiple unknown mods still execute every requested literal action even though
 -- the public warning result is intentionally collapsed to one status string.
@@ -137,7 +160,7 @@ check(nil, "MissingMod", nil)
 catalog["missingtype"], catalog["missingmod"] = nil, nil
 resolver.clear_cache()
 check("MissingType", nil, "unresolved_literal")
-check(nil, "MissingMod", "unresolved_literal")
+check(nil, "MissingMod", nil)
 
 -- Warm resolver calls are deliberately allocation-free for the common nil/string
 -- result contract. Disable the recording setter first, then disable JIT allocation

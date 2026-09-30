@@ -490,6 +490,22 @@ Conceptually:
 The resolver maps a module mod to the applicable standalone Vim/TS/LSP
 representations in the current language context.
 
+For LSP, the modifier name does not have to be pre-registered by ChromaFlow or
+already exist as a highlight group. Server-specific modifiers are valid standalone
+Mods and can be materialized directly as:
+
+```text
+@lsp.mod.<modifier>.<filetype>
+```
+
+For example, `mods.functionScope` in a C language module can own
+`@lsp.mod.functionScope.c` even when clangd's group was not present when the
+theme environment was catalogued.
+
+Vim/Syntax and Tree-sitter standalone modifier targets remain environment-driven,
+and this standalone LSP rule does not imply that every Type + custom modifier
+combination is automatically created as a TypeMod.
+
 A module mod can contain style fields, a pipeline, a semantic `link`, and a
 priority:
 

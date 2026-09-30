@@ -214,10 +214,6 @@ local function reverse_ts_mod(token)
 	return reverse_mod("ts", token) or token
 end
 
-local function lower_token(token)
-	return type(token) == "string" and token:lower() or nil
-end
-
 local function append_lsp(items, seen)
 	local tokens = vim.lsp.semantic_tokens.get_at_pos(0) or {}
 	if #tokens == 0 then
@@ -229,7 +225,8 @@ local function append_lsp(items, seen)
 		-- LSP already supplies the semantic axes separately. In particular,
 		-- token.type == "modifier" is just a Type named "modifier"; only the
 		-- modifiers table represents Mods.
-		local type_name = reverse_type("lsp", token.type) or lower_token(token.type)
+		local type_name = reverse_type("lsp", token.type)
+			or resolver.semantic_type_token("lsp", token.type)
 		local parent = append(items, seen, "Type", type_name, nil, nil, "lsp")
 
 		local mods = {}
@@ -239,7 +236,8 @@ local function append_lsp(items, seen)
 		table.sort(mods)
 
 		for j = 1, #mods do
-			local mod = reverse_mod("lsp", mods[j]) or lower_token(mods[j])
+			local mod = reverse_mod("lsp", mods[j])
+				or resolver.semantic_typemod_token("lsp", mods[j])
 			local entry = append(items, seen, "Mod", mod, nil, nil, "lsp")
 			if entry and not entry.parent then entry.parent = parent end
 			append(items, seen, "TypeMod", type_name and mod and (type_name .. "." .. mod) or nil, type_name, mod, "lsp")

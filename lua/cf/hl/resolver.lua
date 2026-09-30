@@ -262,10 +262,11 @@ end
 -- mod_cache[typemod]:
 --   1 vim_name|false
 --   2 ts_name|false
---   3 lsp_mod_name|false
+--   3 lsp_mod_name
 --   4 ts_token
 --   5 lsp_mod_token
---   6 known
+--   6 known (standalone LSP modifiers are always addressable)
+--   7 known_lsp_typemod_component (preserves TypeMod fallback rules)
 --
 -- typemod_cache[type][typemod]:
 --   1 ts_typemod_name|false
@@ -655,12 +656,11 @@ local function mod_entry(typemod)
 	local ts_name = lookup_hl("@" .. ts_token)
 
 	local lsp_candidate = "@lsp.mod." .. lsp_token
-	local lsp_name = lookup_hl(lsp_candidate)
-	local lsp_known = lsp_name ~= nil or map ~= nil or known_lsp_modifier(typemod)
-
-	if not lsp_name and lsp_known then
-		lsp_name = lsp_candidate
-	end
+	local lsp_existing = lookup_hl(lsp_candidate)
+	-- Servers may advertise custom semantic-token modifiers. Neovim names
+	-- their standalone groups @lsp.mod.<token> even before a highlight exists.
+	local lsp_name = lsp_existing or lsp_candidate
+	local lsp_typemod_known = lsp_existing ~= nil or map ~= nil or known_lsp_modifier(typemod)
 
 	cached = {
 		vim_name or false,
@@ -668,7 +668,8 @@ local function mod_entry(typemod)
 		lsp_name or false,
 		ts_token,
 		lsp_token,
-		vim_name ~= nil or ts_name ~= nil or lsp_known,
+		true,
+		lsp_typemod_known,
 	}
 	mod_cache[typemod] = cached
 	return cached
@@ -724,7 +725,7 @@ local function typemod_entry(type_name, typemod, t, q)
 	end
 
 	local lsp_typemod
-	if t[5] and q[3] then
+	if t[5] and q[7] then
 		-- Once both LSP components are real, typemod spelling is deterministic.
 		local candidate = "@lsp.typemod." .. t[7] .. "." .. q[5]
 		lsp_typemod = lookup_hl(candidate) or candidate

@@ -209,6 +209,21 @@ produces:
 A token whose Type is literally named `modifier` remains a Type named
 `modifier`; only the LSP `modifiers` set produces Mod entries.
 
+Before falling back to generic token normalization, CFPick checks the current
+compiled theme's resolver-derived reverse map. This lets server-specific
+standalone modifiers resolve back to their exact module `mods` declaration.
+
+For example, if a C language module contains:
+
+```lua
+mods = {
+  functionScope = { ... },
+}
+```
+
+then an LSP `functionScope` modifier can resolve to that editable Mod source even
+if `@lsp.mod.functionScope` did not exist before the theme was compiled.
+
 The values come from:
 
 ```lua

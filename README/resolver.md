@@ -17,7 +17,7 @@
 - [TypeMod `false`](#typemod-false)
 - [Standalone module `mods`](#standalone-module-mods)
 - [Names with no existing resolved type](#names-with-no-existing-resolved-type)
-- [Names with no existing standalone modifier](#names-with-no-existing-standalone-modifier)
+- [Standalone modifiers with no existing Vim/TS group](#standalone-modifiers-with-no-existing-vimts-group)
 - [Type + modifier fallback](#type--modifier-fallback)
 - [Resolver literal handling is not `raw`](#resolver-literal-handling-is-not-raw)
 - [`style_targets`](#style_targets)
@@ -410,24 +410,19 @@ The resolver tries the modifier in the three normal source forms:
 For Vim/Syntax and Tree-sitter, an ordinary modifier candidate has to exist in the
 current highlight environment before it is used.
 
-Standalone LSP modifiers are slightly different. The resolver knows the standard
-LSP modifier tokens:
+Standalone LSP modifiers are different. Any modifier token can address the normal
+Neovim form:
 
 ```text
-abstract
-async
-declaration
-definition
-deprecated
-documentation
-modification
-readonly
-static
+@lsp.mod.<modifier>
 ```
 
-so `@lsp.mod.<modifier>` may be addressed even when that exact highlight group was
-not present when the environment catalog was built. This knowledge applies to the
-standalone `@lsp.mod.*` form only.
+even when that exact highlight group was not present when the environment catalog
+was built. This is intentional because an LSP server may advertise modifier names
+that are not part of ChromaFlow's built-in naming knowledge.
+
+This rule applies to the standalone Mod axis only. It does **not** make every
+modifier token automatically eligible for normal TypeMod construction.
 
 ## Modifier naming deviations
 
@@ -493,17 +488,41 @@ not own its own style, Tree-sitter falls back to the modifier target instead:
 
 It does **not** manufacture `@<ts-type-token>.<ts-modifier-token>` for that case.
 
-For LSP, once both normal LSP components are available, the TypeMod spelling is
-deterministic:
+For LSP, a normal type-owned TypeMod can use the deterministic spelling:
 
 ```text
 @lsp.typemod.<type-token>.<modifier-token>
 ```
 
-so that concrete LSP TypeMod name can be used even if the combined name itself was
-not already present. The `known_lsp_modifier()` list still belongs to standalone
-`@lsp.mod.*` resolution; it must not be read as a registry of allowed
-`@lsp.typemod.*` combinations.
+when the type resolves normally and the modifier is known to be a valid TypeMod
+component.
+
+For this purpose, a modifier is known when at least one of these is true:
+
+- its standalone `@lsp.mod.<token>` group already exists in the current
+  environment;
+- it has an explicit source-specific naming deviation;
+- it is one of the built-in standard LSP modifier tokens:
+
+```text
+abstract
+async
+declaration
+definition
+deprecated
+documentation
+modification
+readonly
+static
+```
+
+This distinction is deliberate. A server-specific modifier such as
+`functionScope` is always addressable as a standalone `@lsp.mod.functionScope`
+Mod, but that alone does not make the resolver invent every possible
+`@lsp.typemod.<type>.functionScope` combination during normal TypeMod fallback.
+
+A styled TypeMod is different: it explicitly owns the concrete combination and
+therefore follows the concrete-combination rules described below.
 
 If neither normal TypeMod representation can carry the request, the existing
 resolver fallback rules continue from the original modifier/type information
@@ -639,22 +658,35 @@ unresolved_literal
 so the higher diagnostic layer may report that unchanged-name fallback was
 required without putting source diagnostics into the resolver hot path.
 
-## Names with no existing standalone modifier
+## Standalone modifiers with no existing Vim/TS group
 
-A standalone modifier has no three-layer type chain of its own. If normal
-modifier resolution cannot produce a usable target, the modifier spelling itself
-is used as the fallback highlight name.
+A standalone modifier does not need a pre-existing LSP highlight group.
 
-For example:
+For example, a language module may style a server-specific modifier such as:
 
 ```text
-MissingMod
+functionScope
 ```
 
-falls back to:
+with C filetype context. When LSP is an enabled target, the resolver can
+materialize:
 
 ```text
-MissingMod
+@lsp.mod.functionScope.c
+```
+
+even if neither `@lsp.mod.functionScope` nor its `.c` variant existed in the
+environment catalog before theme compilation.
+
+Vim/Syntax and Tree-sitter remain environment-driven: their standalone modifier
+forms are used only when the corresponding candidate already exists.
+
+If LSP is not an enabled target and no selected Vim/Tree-sitter representation can
+carry the modifier, the unchanged modifier spelling remains the normal literal
+fallback. In that case the resolver can return:
+
+```text
+unresolved_literal
 ```
 
 Its spelling still identifies the source layer when it is already source-shaped:
@@ -665,7 +697,7 @@ Its spelling still identifies the source layer when it is already source-shaped:
 | `@name` | Tree-sitter |
 | `@lsp....` | LSP |
 
-The active target mask decides whether that layer is written.
+The active target mask decides whether that fallback layer is written.
 
 ## Type + modifier fallback
 
@@ -1143,8 +1175,17 @@ Examples include:
 | TS `function.method` | `method` |
 | TS `variable.parameter` | `parameter` |
 
-Only real naming deviations belong in those maps. CFPick still handles its own
-source collection, concrete-capture interpretation, priority, and save logic.
+Only real naming deviations belong in those maps.
+
+For the current compiled theme, CFPick first builds a reverse map from the
+resolver's runtime names. This is important for server-specific standalone LSP
+Mods: a declaration such as `mods.functionScope` can map the token
+`functionScope` back to that exact semantic key even when the LSP highlight group
+did not exist before the theme was compiled.
+
+The generic reverse helpers are only the naming fallback. CFPick still owns source
+collection, concrete-capture interpretation, priority, editable-source matching,
+and save logic.
 
 That full behavior belongs in [`picker.md`](picker.md).
 
