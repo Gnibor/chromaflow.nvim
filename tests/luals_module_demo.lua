@@ -37,6 +37,7 @@ return l.setup("lua", {
 			static = false,
 			deprecated = {
 				fg = c.black,
+				sp = c.red,
 				undercurl = true,
 				priority = 120,
 				pipeline = {

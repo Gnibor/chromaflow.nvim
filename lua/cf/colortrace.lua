@@ -4,7 +4,7 @@ local api = vim.api
 local color = require("cf.color")
 local diagnostic = require("cf.diagnostic")
 
-local debug_enabled = false
+local color_trace_enabled = false
 local picker_enabled = false
 
 -- Picker traces are transactional: compilation builds a staging cache and only
@@ -37,11 +37,11 @@ end
 
 local function sync_setup()
 	local hl = package.loaded["cf.hl.setup"]
-	if not hl and (debug_enabled or picker_enabled) then
+	if not hl and (color_trace_enabled or picker_enabled) then
 		hl = require("cf.hl.setup")
 	end
 	if hl and type(hl._colortrace_mode) == "function" then
-		hl._colortrace_mode(debug_enabled, picker_enabled)
+		hl._colortrace_mode(color_trace_enabled, picker_enabled)
 	end
 end
 
@@ -129,21 +129,20 @@ local function report(source, trace, code)
 	append(" -> result ")
 	append_color(trace.after)
 
-	diagnostic.report("hint", {
+	diagnostic._trace_info({
 		message = table.concat(parts),
 		source = source,
-		debug = true,
 		code = code,
 		data = { spans = spans },
 	})
 end
 
-function M.set_debug(enabled)
+function M.set_enabled(enabled)
 	enabled = enabled == true
-	if debug_enabled == enabled then
+	if color_trace_enabled == enabled then
 		return
 	end
-	debug_enabled = enabled
+	color_trace_enabled = enabled
 	sync_setup()
 end
 
@@ -166,18 +165,18 @@ function M.set_picker(enabled)
 	sync_setup()
 end
 
-function M.debug_enabled()
-	return debug_enabled
+function M.color_trace_enabled()
+	return color_trace_enabled
 end
 
 function M.picker_enabled()
 	return picker_enabled
 end
 
--- Called once per source execution by cf.hl.setup. Picker traces every source;
--- debug traces only sources visible in the active tabpage. During a debug replay
--- of a picker-cached file, colour tracing is deliberately suppressed and the
--- cached source trace is emitted after the module has been re-executed.
+-- Called once per source execution by cf.hl.setup. Picker mode traces every
+-- source; live ColorTrace traces only sources visible in the active tabpage.
+-- During an on-view replay of a picker-cached file, colour tracing is suppressed
+-- and the cached source trace is emitted after the module has been re-executed.
 function M._source_mode(path)
 	local normalized = normalize(path)
 	local reuse = reuse_stack[#reuse_stack]
@@ -185,8 +184,8 @@ function M._source_mode(path)
 		return false, false
 	end
 
-	local debug_visible = debug_enabled and current_tab_buffer(normalized) ~= nil
-	return picker_enabled or debug_visible, debug_visible
+	local color_trace_visible = color_trace_enabled and current_tab_buffer(normalized) ~= nil
+	return picker_enabled or color_trace_visible, color_trace_visible
 end
 
 function M._source_begin(path)
@@ -197,7 +196,7 @@ function M._source_begin(path)
 	ensure_file(target, path)
 end
 
-function M._record(owner_source, source, trace, pipeline_index, emit_debug)
+function M._record(owner_source, source, trace, pipeline_index, emit_color_trace)
 	if picker_enabled then
 		local target = staging or cache
 		local entry = ensure_file(target, source.file)
@@ -221,7 +220,7 @@ function M._record(owner_source, source, trace, pipeline_index, emit_debug)
 		end
 	end
 
-	if emit_debug == true and debug_enabled then
+	if emit_color_trace == true and color_trace_enabled then
 		report(source, trace, pipeline_index)
 	end
 end
@@ -285,7 +284,7 @@ end
 -- Return nil when there is no valid picker cache for this file/theme. Zero is a
 -- valid result: the source was cached but contains no colour operations.
 function M.emit_file(path, compiled)
-	if not debug_enabled or cache_theme ~= compiled then
+	if not color_trace_enabled or cache_theme ~= compiled then
 		return nil
 	end
 	local entry = cache[normalize(path)]
@@ -299,8 +298,9 @@ function M.emit_file(path, compiled)
 	return #entry.records
 end
 
--- Internal picker/debug read API. The returned object is the active immutable
--- source snapshot for the current compiled theme; consumers must not mutate it.
+-- Internal picker/ColorTrace read API. The returned object is the active
+-- immutable source snapshot for the current compiled theme; consumers must not
+-- mutate it.
 function M._cached(path, compiled)
 	if cache_theme ~= compiled then
 		return nil

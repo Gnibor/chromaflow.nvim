@@ -136,15 +136,15 @@ local CFLinkDeclaration = {}
 ---@field cfg fun(percent:number, addedColor:CFColor): CFPipelineOperation Terminal foreground only; addedColor is ARGB/hex, not an index.
 ---@field cbg fun(percent:number, addedColor:CFColor): CFPipelineOperation Terminal background only; addedColor is ARGB/hex, not an index.
 
----@class CFLanguageModule
+---@class CFLanguageModule: CFCompiledModule
 ---@field kind "language"
 ---@field name? string
 
----@class CFPluginModule
+---@class CFPluginModule: CFCompiledModule
 ---@field kind "plugin"
 ---@field name string
 
----@class CFUIModule
+---@class CFUIModule: CFCompiledModule
 ---@field kind "ui"
 
 ---@class CFRuntimeTarget
@@ -169,15 +169,19 @@ local RuntimePluginScope = {}
 ---@field _cf_runtime_declaration true
 ---@field name string
 ---@field spec CFRuntimeActionStyle
+---@field source? CFDiagnosticSource
 local RuntimeGroupDeclaration = {}
 
----@class CFRuntimeModuleSpec: CFRuntimeGroupDeclaration[]
+---@alias CFRuntimeModuleSpec CFRuntimeGroupDeclaration[]
 
 ---@class CFRuntimeModuleDefinition
 ---@field _cf_runtime_module true
 ---@field name string
 ---@field groups table<string, CFRuntimeActionStyle>
 ---@field group_ticks table<string, integer?> Millisecond interval per action, if timed.
+---@field group_sources table<string, CFDiagnosticSource?>
+---@field declarations CFRuntimeModuleSpec
+---@field source? CFDiagnosticSource
 ---@field exports table<string, any> Functions and values assigned to the runtime DSL proxy.
 local RuntimeModuleDefinition = {}
 

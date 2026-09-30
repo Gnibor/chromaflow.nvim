@@ -19,7 +19,7 @@
 ---@field ok? boolean Show OK user messages.
 
 ---@class CFDiagnosticSetupOptions
----@field debug? boolean Show debug-only records and bypass the normal diagnostic/message visibility filters.
+---@field color_trace? boolean Enable ColorTrace for visible .cf sources. Does not change diagnostic severity filters. Default false.
 ---@field severity_bias? integer Global diagnostic severity shift inside the internal 0..255 range.
 ---@field severity? CFDiagnosticSeveritySetupOptions Visibility filters for HINT/WARN/ERROR diagnostics.
 ---@field messages? CFDiagnosticMessageSetupOptions Visibility filters for INFO/OK user messages.
@@ -30,7 +30,7 @@
 ---@field watch? boolean Watch the active/default theme files and reload after the 250 ms debounce window. Default true.
 ---@field picker? boolean Enable picker source tracking and :CFPick. Default false.
 ---@field autoreload? CFAutoreloadSetupOptions Consumer refresh policy after applying a theme.
----@field diagnostic? CFDiagnosticSetupOptions Diagnostic/debug visibility policy.
+---@field diagnostic? CFDiagnosticSetupOptions Diagnostic/ColorTrace policy.
 ---@field lineblend? CFLineBlendSetupOptions LineBlend lifecycle/configuration.
 
 ---@class CFCompiledThemeFile
@@ -42,9 +42,14 @@
 ---@field ignored? boolean File returned no theme module and was skipped with a HINT.
 
 ---@class CFCompiledModule
+---@field _cf_module true
+---@field _cf_skip? boolean Duplicate module skipped during compilation.
 ---@field kind "language"|"plugin"|"ui"
 ---@field name? string
 ---@field actions table[]
+---@field declarations? CFModuleDeclaration[]
+---@field mods? table<string, CFModuleMod>
+---@field source? CFDiagnosticSource
 ---@field apply fun(self:CFCompiledModule)
 
 ---@class CFCompiledTheme
@@ -84,6 +89,23 @@ function M.reload() end
 ---@param set_default? boolean
 ---@return CFCompiledTheme compiledTheme
 function M.set_theme(name, set_default) end
+
+---Persist a new default theme while keeping the selected active theme, then reload.
+---Available after VimEnter when theme_path is configured.
+---@param name string
+---@return string default_name
+---@return string active_name
+function M.set_default_theme(name) end
+
+---Open the theme selection menu. Available after VimEnter with a configured theme root.
+---@return CFMenu menu
+function M.theme_menu() end
+
+---Write pending picker edits to theme files and reload the theme.
+---Requires picker=true, theme_path, and VimEnter.
+---@return integer edit_count
+---@return integer file_count
+function M.save() end
 
 function M.stop_watcher() end
 

@@ -206,6 +206,71 @@ assert(load(inline_plan.files[1].content), "adjacent style removals produced inv
 save.write(inline_plan)
 assert(loadfile(path), "inline removal damaged closing brace")
 
+-- Regression: the shared Mod/TypeMod source-entry writer must preserve the
+-- distinction between module `mods` and group `typemods`, including when the
+-- corresponding container does not exist yet.
+source = [[
+local hl = require("cf.hl.setup")
+local l = hl.language
+return l.setup("lua", {
+	l:group("variable", {
+		bold = true,
+	}),
+})
+]]
+write(source)
+setup_source = source_at('l.setup("lua"')
+group_source = source_at('l:group("variable"')
+
+local missing_base_action = {
+	kind = "resolver_style",
+	type_name = "variable",
+	typemod = nil,
+	style = { bold = true },
+	_cf_source = group_source,
+}
+local missing_mod_action = {
+	kind = "resolver_style",
+	type_name = nil,
+	typemod = "deprecated",
+	style = {},
+	_cf_source = setup_source,
+}
+local missing_typemod_action = {
+	kind = "resolver_style",
+	type_name = "variable",
+	typemod = "readonly",
+	style = { bold = true },
+	_cf_source = group_source,
+}
+
+edits = {
+	missing_mod = {
+		target = "missing_mod", source = setup_source, action = missing_mod_action,
+		kind = "Mod", name = "deprecated", typemod = "deprecated",
+	},
+	missing_typemod = {
+		target = "missing_typemod", source = group_source, action = missing_typemod_action,
+		kind = "TypeMod", name = "variable.readonly", type_name = "variable", typemod = "readonly",
+	},
+}
+states.missing_mod = { base = {}, current = { italic = true } }
+states.missing_typemod = { base = missing_typemod_action.style, current = { bold = true, underline = true } }
+package.loaded["cf.theme"].current = function()
+	return { modules = { { actions = { missing_base_action, missing_mod_action, missing_typemod_action } } } }
+end
+
+local missing_containers = save.plan()
+assert(missing_containers.count == 2 and #missing_containers.files == 1,
+	"CFSave did not plan both missing Mod/TypeMod containers")
+save.write(missing_containers)
+local missing_saved = read()
+assert(missing_saved:find('mods = { ["deprecated"] = { italic = true } }', 1, true),
+	"CFSave did not create module mods container")
+assert(missing_saved:find('typemods = { ["readonly"] = { underline = true } }', 1, true),
+	"CFSave did not create group typemods container")
+assert(loadfile(path), "missing Mod/TypeMod container rewrite produced invalid Lua")
+
 vim.fn.delete(root, "rf")
 
 -- Command wiring stays picker-only and does not load the save writer during

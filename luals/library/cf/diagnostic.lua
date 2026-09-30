@@ -11,6 +11,8 @@
 ---@field file string
 ---@field line integer 1-based source line.
 ---@field col integer 1-based source column.
+---@field end_line? integer 1-based end line for a captured DSL call.
+---@field end_col? integer 1-based end column for a captured DSL call.
 
 ---@class CFDiagnosticContext
 ---@field kind? string
@@ -21,7 +23,7 @@
 ---@field source CFDiagnosticSource
 ---@field context? CFDiagnosticContext
 ---@field tags? CFDiagnosticTag[]
----@field debug? boolean `true` = debug-only, `false` = normal-visible, `nil` = default policy.
+---@field code? string|integer
 ---@field data? any
 
 ---@class CFDiagnosticAssertionData: CFDiagnosticRecordData
@@ -35,19 +37,18 @@
 ---@field source CFDiagnosticSource
 ---@field context? CFDiagnosticContext
 ---@field tags CFDiagnosticTag[]
----@field debug? boolean
+---@field code? string|integer
 ---@field data? any
 ---@field severity? integer Only for `form == "diagnostic"`.
 ---@field kind? CFDiagnosticMessageKind Only for `form == "message"`.
+---@field message_policy? boolean Only for `form == "message"`; false bypasses the normal message visibility filter.
 
 ---@class CFDiagnosticConfigure
----@field debug? boolean
 ---@field severity_bias? integer
 ---@field severity? { hint?: boolean, warn?: boolean, error?: boolean }
 ---@field messages? { info?: boolean, ok?: boolean }
 
----@class CFDiagnosticPolicy
----@field debug boolean
+---@class CFDiagnosticPolicy: CFDiagnosticConfigure
 ---@field severity_bias integer
 ---@field severity { hint: boolean, warn: boolean, error: boolean }
 ---@field messages { info: boolean, ok: boolean }
@@ -120,6 +121,14 @@ function M.format(record) end
 
 ---@return integer rendered
 function M.flush() end
+
+---Render pending records for one source buffer without clearing diagnostics in other buffers.
+---@param bufnr integer
+---@return integer rendered
+function M.flush_buffer(bufnr) end
+
+---Open the ChromaFlow diagnostic float for the current line, when available.
+function M.open_float() end
 
 ---@return CFDiagnosticRecord[]
 function M.pending() end

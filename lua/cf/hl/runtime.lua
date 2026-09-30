@@ -95,7 +95,9 @@ local function render_style(style)
 	for key, value in pairs(style) do
 		if key == "fg" or key == "bg" or key == "sp" then
 			if type(value) == "number" then
-				rendered[key] = config.alpha and color.to_rgba_hex(value) or color.to_rgb_hex(value)
+				-- Neovim accepts 0xRRGGBB directly. Keep the normal render path numeric
+				-- instead of formatting #RRGGBB only for nvim_set_hl() to parse it back.
+				rendered[key] = config.alpha and color.to_rgba_hex(value) or band(value, 0xFFFFFF)
 			else
 				rendered[key] = value
 			end

@@ -1685,8 +1685,9 @@ function M.activate(opts)
 	M.refresh(true)
 end
 
--- Kept for direct users of the old helper API. Plugin setup itself calls
--- activate() only when lineblend = true; user commands never re-register.
+-- Keep setup() as an alias for direct callers. ChromaFlow invokes it only when
+-- lineblend.autostart is true; later activate() calls reuse the installed provider
+-- and autocmds instead of registering them again.
 M.setup = M.activate
 
 function M.is_active()

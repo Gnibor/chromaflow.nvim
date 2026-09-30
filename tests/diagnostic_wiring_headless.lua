@@ -11,7 +11,7 @@ cf.setup({
 	watch = false,
 	lineblend = { autostart = false },
 	diagnostic = {
-		debug = false,
+		color_trace = false,
 		severity_bias = 7,
 		severity = { hint = false, warn = true, error = true },
 		messages = { info = false, ok = true },
@@ -61,7 +61,8 @@ write(root .. "/dark/04-bad-dsl.cf", {
 	"local hl = require('cf.hl.setup')",
 	"local raw = hl.raw",
 	"return hl.ui.setup({",
-	"  raw:group('BadDSL', { not_a_highlight_field = true }),",
+	"  raw:group('BadDSL', { bold = true, typemods = { broken = 42 } }),",
+	"  raw:group('CFDiagnosticAfterBadGroup', { italic = true }),",
 	"})",
 })
 write(root .. "/dark/05-not-a-module.cf", {
@@ -93,6 +94,9 @@ vim.notify = old_notify
 
 local compiled = assert(theme.current())
 assert(runtime.group_style("CFDiagnosticGood") ~= nil, "a bad sibling module aborted the complete theme")
+assert(runtime.group_style("BadDSL") ~= nil, "an invalid typemod discarded the valid group base")
+assert(runtime.group_style("broken") == nil, "an invalid typemod leaked its own action")
+assert(runtime.group_style("CFDiagnosticAfterBadGroup") ~= nil, "a bad group aborted later sibling declarations")
 assert(runtime.group_style("CFTypoBefore") ~= nil, "a typo aborted declarations before it")
 assert(runtime.group_style("CFTypoAfter") ~= nil, "a skipped typo swallowed declarations after its nil hole")
 local file_state = {}
@@ -100,7 +104,7 @@ for _, file in ipairs(compiled.module_files) do
 	file_state[file.name] = file
 end
 assert(file_state["03-bad.cf"].failed == true and file_state["03-bad.cf"].ignored ~= true)
-assert(file_state["04-bad-dsl.cf"].failed == true and file_state["04-bad-dsl.cf"].ignored ~= true)
+assert(file_state["04-bad-dsl.cf"].failed ~= true and file_state["04-bad-dsl.cf"].ignored ~= true)
 assert(file_state["05-not-a-module.cf"].ignored == true and file_state["05-not-a-module.cf"].failed ~= true)
 assert(file_state["06-typo.cf"].failed ~= true and file_state["06-typo.cf"].ignored ~= true)
 assert(#diagnostic.pending() == 0, "cf.setup() did not flush the completed diagnostic cycle")
@@ -128,9 +132,9 @@ local inline = vim.diagnostic.get(buf, { namespace = ns })
 assert(#inline == 0)
 -- Root setup restored hint=false, so internal HINT producers exited before record/source refinement.
 -- The two real errors still use ASSERT output.
-assert(#notifications == 2)
-assert(notifications[1].level == vim.log.levels.ERROR and notifications[2].level == vim.log.levels.ERROR)
-local notification_text = notifications[1].message .. "\n" .. notifications[2].message
+assert(#notifications == 1, "ASSERT fallbacks were not batched")
+assert(notifications[1].level == vim.log.levels.ERROR)
+local notification_text = notifications[1].message
 assert(notification_text:find("03-bad.cf", 1, true))
 assert(notification_text:find("04-bad-dsl.cf", 1, true))
 assert(not notification_text:find("05-not-a-module.cf", 1, true))

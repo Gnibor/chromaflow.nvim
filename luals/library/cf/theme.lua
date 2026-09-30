@@ -41,6 +41,14 @@ function M.selection(root) end
 ---@return string[]
 function M.available(root) end
 
+---Write a new default theme while preserving the selected active theme.
+---This changes selection only; use cf.set_default_theme() to reload and update the watcher.
+---@param root string
+---@param default_name string
+---@return string default_name
+---@return string active_name
+function M.set_default(root, default_name) end
+
 ---Write the active theme into `.cf-theme`. When set_default is true, both lines
 ---are changed to the selected theme. This function only changes selection; it
 ---does not compile/apply. Prefer cf.set_theme() for normal user-facing changes.
@@ -50,5 +58,11 @@ function M.available(root) end
 ---@return string default_name
 ---@return string active_name
 function M.select(root, active_name, set_default) end
+
+---Re-execute one file from the current theme to collect on-view diagnostics.
+---The rebuilt module is not applied to the active theme.
+---@param path string
+---@return boolean found_and_loaded
+function M.color_trace_file(path) end
 
 return M

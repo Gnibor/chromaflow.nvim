@@ -11,7 +11,7 @@ config/nvim/lua/tools/benchmark.lua
 nvim-plugins/cf.nvim/tests/benchmark.lua
 ```
 
-Die Kopie unter `tests/` erlaubt den ChromaFlow-Benchmarks, dieselbe Messlogik direkt neben den Tests zu verwenden. `full_benchmark.lua` und `debug_benchmark.lua` bevorzugen diese lokale Kopie und fallen nur auf `tools.benchmark` zurück, wenn sie nicht vorhanden ist.
+Die Kopie unter `tests/` erlaubt den ChromaFlow-Benchmarks, dieselbe Messlogik direkt neben den Tests zu verwenden. `full_benchmark.lua`, `colortrace_benchmark.lua` und `float_benchmark.lua` bevorzugen diese lokale Kopie und fallen nur auf `tools.benchmark` zurück, wenn sie nicht vorhanden ist.
 
 ---
 

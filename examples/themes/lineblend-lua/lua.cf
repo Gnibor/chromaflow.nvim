@@ -1,0 +1,296 @@
+local hl = require("cf.hl.setup")
+local c = hl.colors
+local l = hl.language
+
+-- LineBlend demo:
+-- Give common Lua token classes their own subtle backgrounds so a normal
+-- CursorLine visibly breaks into coloured islands when LineBlend is disabled.
+--
+-- This module claims only the "lua" language identity. Everything else can
+-- continue to come from the default-theme fallback.
+
+local BG = 18
+
+return l.setup("lua", {
+	mods = {
+		deprecated = { strikethrough = true },
+	},
+
+	l:group("comment", {
+		fg = c.comment,
+		bg = c.comment,
+		italic = true,
+		pipeline = { hl.opacity.bg(10) },
+		typemods = {
+			documentation = {
+				fg = c.comment,
+				bg = c.comment,
+				pipeline = {
+					hl.lighten.fg(8),
+					hl.opacity.bg(12),
+				},
+			},
+		},
+	}),
+
+	l:group("string", {
+		fg = c.string,
+		bg = c.string,
+		pipeline = { hl.opacity.bg(BG) },
+		typemods = {
+			documentation = {
+				fg = c.comment,
+				bg = c.comment,
+				italic = true,
+				pipeline = { hl.opacity.bg(BG) },
+			},
+		},
+	}),
+
+	l:group("number", {
+		fg = c.number,
+		bg = c.number,
+		pipeline = { hl.opacity.bg(BG) },
+	}),
+
+	l:group("boolean", {
+		fg = c.number,
+		bg = c.number,
+		pipeline = { hl.opacity.bg(BG) },
+	}),
+
+	l:group("constant", {
+		fg = c.constant,
+		bg = c.constant,
+		pipeline = { hl.opacity.bg(BG) },
+		typemods = {
+			readonly = {},
+			builtin = {
+				pipeline = {
+					hl.mix.fg(18, c.type),
+				},
+			},
+		},
+	}),
+
+	l:group("variable", {
+		fg = c.variable,
+		bg = c.variable,
+		pipeline = { hl.opacity.bg(BG) },
+		typemods = {
+			readonly = {
+				pipeline = { hl.mix.fg(35, c.constant) },
+			},
+			builtin = {
+				pipeline = { hl.mix.fg(24, c.builtin) },
+			},
+			static = {
+				italic = true,
+				pipeline = { hl.mix.fg(12, c.type) },
+			},
+		},
+	}),
+
+	l:group("parameter", {
+		fg = c.parameter,
+		bg = c.parameter,
+		pipeline = { hl.opacity.bg(BG) },
+		typemods = {
+			readonly = {
+				italic = true,
+				pipeline = { hl.mix.fg(18, c.constant) },
+			},
+		},
+	}),
+
+	l:group("property", {
+		fg = c.property,
+		bg = c.property,
+		pipeline = { hl.opacity.bg(BG) },
+		typemods = {
+			readonly = {
+				pipeline = { hl.mix.fg(24, c.constant) },
+			},
+			static = {
+				italic = true,
+				pipeline = { hl.mix.fg(18, c.type) },
+			},
+			builtin = {
+				pipeline = { hl.mix.fg(15, c.builtin) },
+			},
+		},
+	}),
+
+	l:group("function", {
+		fg = c.func,
+		bg = c.func,
+		types = { "method" },
+		pipeline = {
+			hl.shiftHue.fg(-5),
+			hl.brightness.fg(20),
+			hl.opacity.bg(BG),
+		},
+		typemods = {
+			builtin = {
+				pipeline = { hl.mix.fg(22, c.yellow) },
+			},
+			static = {
+				italic = true,
+				pipeline = { hl.mix.fg(16, c.constant) },
+			},
+			async = {
+				italic = true,
+				pipeline = { hl.mix.fg(20, c.type) },
+			},
+			declaration = { bold = true },
+			definition = { bold = true },
+			abstract = {
+				italic = true,
+				pipeline = { hl.opacity.fg(85) },
+			},
+		},
+	}),
+
+	l:group("type", {
+		fg = c.type,
+		bg = c.type,
+		types = { "struct", "enum", "interface", "class" },
+		pipeline = { hl.opacity.bg(BG) },
+		typemods = {
+			builtin = {
+				pipeline = { hl.mix.fg(25, c.builtin) },
+			},
+			declaration = { bold = true },
+			definition = { bold = true },
+			abstract = {
+				italic = true,
+				pipeline = { hl.opacity.fg(85) },
+			},
+		},
+	}),
+
+	l:group("typeparameter", {
+		fg = c.type,
+		bg = c.type,
+		italic = true,
+		pipeline = { hl.opacity.bg(BG) },
+	}),
+
+	l:group("enummember", {
+		fg = c.constant,
+		bg = c.constant,
+		pipeline = { hl.opacity.bg(BG) },
+	}),
+
+	l:group("namespace", {
+		fg = c.type,
+		bg = c.type,
+		pipeline = {
+			hl.darken.fg(8),
+			hl.opacity.bg(BG),
+		},
+		typemods = {
+			builtin = {
+				pipeline = { hl.mix.fg(15, c.builtin) },
+			},
+		},
+	}),
+
+	l:group("keyword", {
+		fg = c.keyword,
+		bg = c.keyword,
+		pipeline = {
+			hl.mix.fg(18, c.constant),
+			hl.opacity.bg(BG),
+		},
+	}),
+
+	l:group("modifier", {
+		fg = c.keyword,
+		bg = c.keyword,
+		pipeline = { hl.opacity.bg(BG) },
+	}),
+
+	l:group("operator", {
+		fg = c.operator,
+		bg = c.operator,
+		pipeline = { hl.opacity.bg(BG) },
+	}),
+
+	-- Tree-sitter-specific combinations. Give the concrete captures their own
+	-- backgrounds as well so the demo remains obvious even without LSP tokens.
+	l:group("keyword", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			["function"] = {
+				fg = c.keyword,
+				bg = c.keyword,
+				bold = true,
+				pipeline = { hl.opacity.bg(BG) },
+			},
+			["return"] = {
+				fg = c.keyword,
+				bg = c.keyword,
+				pipeline = { hl.opacity.bg(BG) },
+			},
+			["operator"] = {
+				fg = c.operator,
+				bg = c.operator,
+				pipeline = { hl.opacity.bg(BG) },
+			},
+		},
+	}),
+
+	l:group("punctuation", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			["bracket"] = {
+				fg = c.muted,
+				bg = c.blue,
+				pipeline = { hl.opacity.bg(14) },
+			},
+			["delimiter"] = {
+				fg = c.muted,
+				bg = c.magenta,
+				pipeline = { hl.opacity.bg(14) },
+			},
+			["special"] = {
+				fg = c.operator,
+				bg = c.operator,
+				pipeline = { hl.opacity.bg(BG) },
+			},
+		},
+	}),
+
+	l:group("variable", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			["member"] = {
+				fg = c.property,
+				bg = c.property,
+				pipeline = { hl.opacity.bg(BG) },
+			},
+		},
+	}),
+
+	l:group("constructor", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		fg = c.type,
+		bg = c.type,
+		pipeline = { hl.opacity.bg(BG) },
+	}),
+
+	l:group("string", {
+		style_targets = { vim = false, ts = true, lsp = false },
+		typemods = {
+			escape = {
+				fg = c.string,
+				bg = c.orange,
+				pipeline = {
+					hl.mix.fg(35, c.operator),
+					hl.opacity.bg(BG),
+				},
+			},
+		},
+	}),
+})

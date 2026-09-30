@@ -3,7 +3,7 @@ vim.opt.runtimepath:prepend(vim.fn.getcwd())
 local api = vim.api
 local config = require("cf.config")
 local diagnostic = require("cf.diagnostic")
-local debug_feature = require("cf.debug")
+local colortrace_view = require("cf.colortrace_view")
 local picker = require("cf.picker")
 local colortrace = require("cf.colortrace")
 local pipeline = require("cf.hl.pipeline")
@@ -44,20 +44,25 @@ write(hidden_path, {
 	"})",
 })
 
-config.setup({ picker = true, diagnostic = { debug = true } })
-assert(diagnostic.configure({ debug = true }))
+config.setup({ picker = true, diagnostic = { color_trace = true, messages = { info = false } } })
+assert(diagnostic.configure(config.diagnostic))
+assert(diagnostic.policy().messages.info == false, "test requires normal INFO messages to be disabled")
+assert(diagnostic._enabled("hint") == false, "color_trace changed HINT visibility")
+assert(diagnostic._enabled("warn") == false, "color_trace changed WARN visibility")
+assert(diagnostic._enabled("error") == true, "color_trace changed ERROR visibility")
 picker.start()
-debug_feature.start()
+colortrace.set_enabled(config.diagnostic.color_trace)
+colortrace_view.start()
 
 local visible_buf = vim.fn.bufadd(visible_path)
 vim.fn.bufload(visible_buf)
 api.nvim_win_set_buf(0, visible_buf)
 
-local old_debug_apply = pipeline.debug_apply
+local old_color_trace_apply = pipeline.color_trace_apply
 local trace_calls = 0
-pipeline.debug_apply = function(...)
+pipeline.color_trace_apply = function(...)
 	trace_calls = trace_calls + 1
-	return old_debug_apply(...)
+	return old_color_trace_apply(...)
 end
 
 local compiled = theme.compile(root)
@@ -79,19 +84,33 @@ vim.fn.bufload(hidden_buf)
 api.nvim_win_set_buf(0, hidden_buf)
 
 local before_replay = trace_calls
-assert(debug_feature._seed(hidden_buf) == true, "debug seed failed for cached hidden file")
-assert(trace_calls == before_replay, "debug retraced a picker-cached colour pipeline")
+assert(colortrace_view._seed(hidden_buf) == true, "ColorTrace seed failed for cached hidden file")
+assert(trace_calls == before_replay, "ColorTrace retraced a picker-cached colour pipeline")
 
 local ns = api.nvim_create_namespace("cf.nvim.diagnostic")
 local rendered = vim.diagnostic.get(hidden_buf, { namespace = ns })
-assert(#rendered == 1, "cached picker trace was not rendered as one debug diagnostic")
-assert(rendered[1].message:find("darken.fg", 1, true), "cached debug diagnostic has wrong operation")
-assert(rendered[1].code == 1, "cached debug diagnostic did not preserve pipeline-local code")
+assert(#rendered == 1, "cached picker trace was not rendered as one INFO message")
+assert(rendered[1].severity == vim.diagnostic.severity.INFO, "ColorTrace message was not rendered as INFO")
+assert(rendered[1].message:find("darken.fg", 1, true), "cached ColorTrace message has wrong operation")
+assert(rendered[1].code == 1, "cached ColorTrace message did not preserve pipeline-local code")
 
-pipeline.debug_apply = old_debug_apply
+local old_abort = colortrace._compile_abort
+local abort_calls = 0
+colortrace._compile_abort = function(...)
+	abort_calls = abort_calls + 1
+	return old_abort(...)
+end
+write(root .. "/active/color.cf", "error('colortrace compile abort probe')\n")
+local failed_ok = pcall(theme.compile, root)
+colortrace._compile_abort = old_abort
+assert(failed_ok == false, "broken color.cf unexpectedly compiled")
+assert(abort_calls == 1, "failed compile did not abort ColorTrace staging")
+assert(colortrace._cached(hidden_path, compiled) ~= nil, "failed compile damaged active ColorTrace cache")
+
+pipeline.color_trace_apply = old_color_trace_apply
 diagnostic.clear()
-debug_feature.stop()
+colortrace_view.stop()
+colortrace.set_enabled(false)
 picker.stop()
-assert(diagnostic.configure({ debug = false }))
 vim.fn.delete(root, "rf")
 print("cf.nvim colortrace tests: OK")

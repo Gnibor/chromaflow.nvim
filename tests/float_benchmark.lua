@@ -1,4 +1,15 @@
-local benchmark = require("tools.benchmark")
+local function load_benchmark()
+	local source = debug.getinfo(1, "S").source
+	if type(source) == "string" and source:sub(1, 1) == "@" then
+		local here = vim.fs.dirname(vim.fs.normalize(source:sub(2)))
+		local sibling = vim.fs.joinpath(here, "benchmark.lua")
+		local chunk = loadfile(sibling)
+		if chunk then return chunk() end
+	end
+	return require("tools.benchmark")
+end
+
+local benchmark = load_benchmark()
 local Float = require("cf.fn.float")
 
 local M = {}

@@ -8,7 +8,7 @@ local M = {
 		treesitter = false,
 	},
 	diagnostic = {
-		debug = false,
+		color_trace = false,
 		severity_bias = 0,
 		severity = {
 			hint = false,
@@ -111,9 +111,10 @@ function M.setup(opts)
 	if opts.diagnostic ~= nil then
 		assert(type(opts.diagnostic) == "table", "cf.nvim setup: diagnostic must be a table")
 
-		if opts.diagnostic.debug ~= nil then
-			assert(type(opts.diagnostic.debug) == "boolean", "cf.nvim setup: diagnostic.debug must be boolean")
-			M.diagnostic.debug = opts.diagnostic.debug
+
+		if opts.diagnostic.color_trace ~= nil then
+			assert(type(opts.diagnostic.color_trace) == "boolean", "cf.nvim setup: diagnostic.color_trace must be boolean")
+			M.diagnostic.color_trace = opts.diagnostic.color_trace
 		end
 
 		if opts.diagnostic.severity_bias ~= nil then

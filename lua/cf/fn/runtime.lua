@@ -174,7 +174,18 @@ local function resolve_target_entry(meta)
 		end
 	end
 	if #actions == 0 then
-		return nil
+		-- Raw runtime targets are literal Neovim highlight names, not only
+		-- ChromaFlow-owned raw declarations. If another colorscheme/plugin already
+		-- materialized the exact group, use its effective style as the sparse
+		-- runtime base. Semantic language/plugin/ui targets still require a theme
+		-- action so their concrete resolver names remain unambiguous.
+		if meta.kind ~= "raw" or vim.fn.hlexists(meta.type_name) ~= 1 then
+			return nil
+		end
+		return {
+			names = { meta.type_name },
+			base = hl_runtime.read_effective_style(meta.type_name),
+		}
 	end
 	table.sort(actions, action_less)
 
@@ -341,23 +352,33 @@ local function recompose(affected, fallback_entry)
 		local override = ordered[i]
 		local names, entry = names_for_override(override)
 		if names and entry then
-			local value
-			if override.mode == "clear" then
-				value = false
-			else
-				local spec, definition, meta = get_action(override.action)
-				local runtime_context = runtime_build_context(definition, meta, override)
-				if override.mode == "replace" then
-					value = build_style(spec, nil, runtime_context)
-				else
-					value = build_style(spec, entry.base, runtime_context)
+			local intersects = false
+			for n = 1, #names do
+				if affected[names[n]] then
+					intersects = true
+					break
 				end
 			end
 
-			for n = 1, #names do
-				local name = names[n]
-				if affected[name] then
-					plan[name] = value
+			if intersects then
+				local value
+				if override.mode == "clear" then
+					value = false
+				else
+					local spec, definition, meta = get_action(override.action)
+					local runtime_context = runtime_build_context(definition, meta, override)
+					if override.mode == "replace" then
+						value = build_style(spec, nil, runtime_context)
+					else
+						value = build_style(spec, entry.base, runtime_context)
+					end
+				end
+
+				for n = 1, #names do
+					local name = names[n]
+					if affected[name] then
+						plan[name] = value
+					end
 				end
 			end
 		end
@@ -478,6 +499,14 @@ local function change_override(target, replacement)
 	adopt_current_theme()
 	assert(current_theme, "cf.fn.runtime: no theme has been applied yet")
 
+	-- Outside ColorScheme transitions a runtime change is transactional: reject a
+	-- missing concrete target before touching override state. Transition callbacks
+	-- intentionally defer target resolution until the final theme base exists.
+	local entry
+	if not transitioning then
+		entry = target_entry(target, false)
+	end
+
 	local key = meta.key
 	local previous = overrides[key]
 
@@ -497,7 +526,6 @@ local function change_override(target, replacement)
 		return true
 	end
 
-	local entry = target_entry(target, false)
 	local affected = {}
 	for i = 1, #entry.names do
 		affected[entry.names[i]] = true

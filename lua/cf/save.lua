@@ -483,8 +483,9 @@ local function rendered_override_table(changes)
 	return "{ " .. table.concat(parts, ", ") .. " }"
 end
 
--- Cold source rewrite only: never execute theme text to discover/edit Mods.
-local function rewrite_qualifier(source, spec, container, name, set, value)
+-- Cold source rewrite only: never execute theme text to discover/edit a
+-- nested `mods` or `typemods` entry.
+local function rewrite_table_entry(source, spec, container, name, set, value)
 	local fields = table_fields(spec, source)
 	local parent = field_value_table(fields[container], source)
 	if parent then
@@ -544,12 +545,12 @@ local function pipeline_table(source, edit)
 	local container = edit.kind == "Mod" and "mods" or (edit.kind == "TypeMod" and "typemods" or nil)
 	if not container then return spec, nil, spec end
 	local fields = table_fields(spec, source)
-	local qualifiers = field_value_table(fields[container], source)
-	assert(not fields[container] or qualifiers, "cf.save: qualifier container must be a literal table")
-	local qualified = qualifiers and table_fields(qualifiers, source)[edit.typemod]
-	local value = qualified and qualified.value
+	local entries = field_value_table(fields[container], source)
+	assert(not fields[container] or entries, "cf.save: " .. container .. " must be a literal table")
+	local entry = entries and table_fields(entries, source)[edit.typemod]
+	local value = entry and entry.value
 	assert(not value or value:type() == "table_constructor" or value:type() == "true" or value:type() == "false",
-		"cf.save: qualifier must be a literal table or boolean")
+		"cf.save: " .. container .. " entry must be a literal table or boolean")
 	return spec, container, value and value:type() == "table_constructor" and value or nil
 end
 
@@ -683,7 +684,7 @@ local function detached_group_text(source, call, edit, state)
 	-- semantic fan-out, external link or colour pipeline. The child starts from
 	-- the parent's already-finished effective style.
 	for name in pairs(existing) do
-		if not DETACH_KEEP[name] then set(name, false) end
+		if edit.detach_type.copy_parent_metadata ~= true or not DETACH_KEEP[name] then set(name, false) end
 	end
 	set("types", false)
 	set("link", false)
@@ -765,10 +766,11 @@ local function rewrite_detached_type(source, edit, state)
 	if not edit.pipeline_edit and #style_delta == 0 then return source, false end
 
 	local child = detached_group_text(source, call, edit, state)
-	local edits = {
-		remove_inherited_type_edit(source, call, edit.detach_type.child),
-		insertion_after_declaration(source, call, child),
-	}
+	local edits = {}
+	if edit.detach_type.remove_from_types ~= false then
+		edits[#edits + 1] = remove_inherited_type_edit(source, call, edit.detach_type.child)
+	end
+	edits[#edits + 1] = insertion_after_declaration(source, call, child)
 	return apply_text_edits(source, edits), true
 end
 
@@ -819,7 +821,7 @@ local function rewrite_pipeline(source, edit)
 	end
 	if #changes == 0 then return source, false end
 	if spec then return rewrite_bool_table(source, spec, changes), true end
-	return rewrite_qualifier(source, root_spec, container, edit.typemod, true, rendered_override_table(changes) or "{}"), true
+	return rewrite_table_entry(source, root_spec, container, edit.typemod, true, rendered_override_table(changes) or "{}"), true
 end
 
 local function rewrite_one(source, edit, state)
@@ -837,7 +839,7 @@ local function rewrite_one(source, edit, state)
 	assert(action ~= nil, "cf.save: picker edit lost compiled action")
 	if edit.rule then
 		assert(name == "group", "cf.save: TypeMod rule source is not group()")
-		return rewrite_qualifier(source, spec, "typemods", edit.typemod, edit.value ~= nil, edit.value), true
+		return rewrite_table_entry(source, spec, "typemods", edit.typemod, edit.value ~= nil, edit.value), true
 	end
 	assert(action.kind == "resolver_style" or action.kind == "raw_style"
 		or action.kind == "resolver_clear" or action.kind == "resolver_link",
@@ -857,7 +859,7 @@ local function rewrite_one(source, edit, state)
 		local value = field_value_table(field, source)
 		if not value then
 			local rendered = rendered_override_table(changes)
-			return rewrite_qualifier(source, spec, "mods", action.typemod, rendered ~= nil, rendered), true
+			return rewrite_table_entry(source, spec, "mods", action.typemod, rendered ~= nil, rendered), true
 		end
 		changes[#changes + 1] = { name = "link", set = false }
 		return rewrite_bool_table(source, value, changes), true
@@ -883,12 +885,12 @@ local function rewrite_one(source, edit, state)
 	local direct = direct_typemod_changes(edit, current)
 	if not field then
 		local rendered = rendered_override_table(direct)
-		return rewrite_qualifier(source, spec, "typemods", typemod, rendered ~= nil, rendered), true
+		return rewrite_table_entry(source, spec, "typemods", typemod, rendered ~= nil, rendered), true
 	end
 	local _, value = field_parts(field.node, source)
 	assert(value, "cf.save: TypeMod source value is missing")
 	if value:type() == "false" then
-		return rewrite_qualifier(source, spec, "typemods", typemod, true, rendered_override_table(direct) or "true"), true
+		return rewrite_table_entry(source, spec, "typemods", typemod, true, rendered_override_table(direct) or "true"), true
 	end
 	direct[#direct + 1] = { name = "link", set = false }
 	return rewrite_typemod_value(source, value, direct, edit), true

@@ -151,11 +151,20 @@ function M.set_theme(name, set_default)
 	-- Stop before writing .cf-theme so our own selection change cannot come back
 	-- through the fs watcher as a second reload 250 ms later.
 	watcher.stop()
-	theme.select(config.theme_path, name, set_default == true)
+	local ok, compiled_or_err = xpcall(function()
+		theme.select(config.theme_path, name, set_default == true)
+		local compiled = load_and_watch()
+		lineblend.refresh()
+		return compiled
+	end, debug.traceback)
 
-	local compiled = load_and_watch()
-	lineblend.refresh()
-	return compiled
+	if not ok then
+		-- A failed selection/reload must not silently disable live watching. The
+		-- last successfully applied theme is still the best available scope.
+		start_watcher(theme.current())
+		error(compiled_or_err, 0)
+	end
+	return compiled_or_err
 end
 
 function M.set_default_theme(name)
@@ -166,9 +175,19 @@ function M.set_default_theme(name)
 	-- Stop before writing .cf-theme so our own default-only change cannot come
 	-- back through the fs watcher as a second reload 250 ms later.
 	watcher.stop()
-	local default_name, active_name = theme.set_default(config.theme_path, name)
-	load_and_watch()
-	return default_name, active_name
+	local ok, default_or_err, active_name = xpcall(function()
+		local default_name, selected_active = theme.set_default(config.theme_path, name)
+		load_and_watch()
+		return default_name, selected_active
+	end, debug.traceback)
+
+	if not ok then
+		-- Keep the previous successful watcher scope alive if changing the
+		-- default or the following reload fails.
+		start_watcher(theme.current())
+		error(default_or_err, 0)
+	end
+	return default_or_err, active_name
 end
 
 function M.theme_menu()
@@ -211,11 +230,18 @@ function M.setup(opts)
 		picker.stop()
 	end
 
-	local debug_feature = package.loaded["cf.debug"]
-	if config.diagnostic.debug then
-		require("cf.debug").start()
-	elseif debug_feature then
-		debug_feature.stop()
+	local colortrace = package.loaded["cf.colortrace"]
+	if config.diagnostic.color_trace then
+		require("cf.colortrace").set_enabled(true)
+	elseif colortrace then
+		colortrace.set_enabled(false)
+	end
+
+	local colortrace_view = package.loaded["cf.colortrace_view"]
+	if config.diagnostic.color_trace then
+		require("cf.colortrace_view").start()
+	elseif colortrace_view then
+		colortrace_view.stop()
 	end
 
 	usr_cmd.setup({

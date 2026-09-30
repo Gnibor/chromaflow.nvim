@@ -29,13 +29,15 @@ for _, module in ipairs(compiled.modules) do
 end
 assert(typemods > 100, "theme does not exercise owned typemod styles")
 local function_base = color.darken(c.func, 3)
-local function_builtin = color.mix(22, c.yellow, function_base)
+local lua_function_base = color.brightness(color.shiftHue(c.func, -5), 20)
 local variable_builtin = color.mix(24, c.builtin, c.variable)
 local type_builtin = color.mix(25, c.builtin, c.type)
-assert(function_builtin ~= variable_builtin and variable_builtin ~= type_builtin)
+assert(color.mix(22, c.yellow, function_base) ~= variable_builtin and variable_builtin ~= type_builtin)
 for _, language in ipairs({ "", "lua", "c", "cpp", "python", "arduino" }) do
 	local suffix = language == "" and "" or "." .. language
-	fg("@function" .. suffix, function_base)
+	local current_function = language == "lua" and lua_function_base or function_base
+	local function_builtin = color.mix(22, c.yellow, current_function)
+	fg("@function" .. suffix, current_function)
 	fg("@function.builtin" .. suffix, function_builtin)
 	fg("@lsp.typemod.function.defaultLibrary" .. suffix, function_builtin)
 	fg("@function.method.builtin" .. suffix, function_builtin)
@@ -50,7 +52,7 @@ for _, language in ipairs({ "", "lua", "c", "cpp", "python", "arduino" }) do
 	eq(style("@lsp.typemod.parameter.readonly" .. suffix).italic, true, "readonly parameter")
 	eq(style("@lsp.typemod.variable.readonly" .. suffix).bg, rgb((color.opacity(c.constant, 5, c.bg))), "readonly variable background")
 	assert(style("@lsp.typemod.property.readonly" .. suffix).bg == nil, "readonly property acquired variable background")
-	fg("@lsp.typemod.function.static" .. suffix, color.mix(16, c.constant, function_base))
+	fg("@lsp.typemod.function.static" .. suffix, color.mix(16, c.constant, current_function))
 	fg("@lsp.typemod.variable.static" .. suffix, color.mix(12, c.type, c.variable))
 	eq(style("@lsp.typemod.function.async" .. suffix).italic, true, "async function")
 	local deprecated = style("@lsp.mod.deprecated" .. suffix)

@@ -64,7 +64,7 @@ local literal_type_cache = {}
 local literal_type_ft_cache = {}
 
 -- Explicit typemod styles own the concrete type+typemod combination.
--- These caches keep those literal TS/LSP names separate from the legacy
+-- These caches keep those literal TS/LSP names separate from the normal
 -- typemod cache, whose fallback semantics are intentionally unchanged.
 local literal_typemod_cache = {}
 local literal_typemod_ft_cache = {}
@@ -1349,7 +1349,7 @@ end
 --   table       -> only truthy entries are materialized
 --   clear       -> independent from targets; truthy entries are cleared first
 --   typemod_style == true -> style belongs to this single type+typemod
---                              combination; false/nil keeps legacy behavior
+--                              combination; false/nil uses normal fallback resolution
 --
 -- Example:
 --   targets = { vim = true }

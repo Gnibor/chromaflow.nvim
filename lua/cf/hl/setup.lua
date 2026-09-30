@@ -52,13 +52,13 @@ local action_sequence = 0
 
 -- Theme-loader source context. Lua tail-call optimization can remove the .cf
 -- frame around l/p/u/r.setup(), so the loader-owned file remains the stable
--- anchor. Group/link caller lines come from debug.getinfo(); optional Lua
--- Tree-sitter ranges refine those starts and provide end-exclusive end positions.
+-- anchor. Caller lines come from debug.getinfo(); when picker/ColorTrace needs
+-- precise source data, Lua Tree-sitter refines DSL calls to end-exclusive ranges.
 local source_stack = {}
 local source_range_cache = {}
 local source_range_cache_active = false
 local error_source_hint
-local colortrace_debug_enabled = false
+local colortrace_enabled = false
 local colortrace_picker_enabled = false
 local colortrace_active = false
 
@@ -363,7 +363,7 @@ local function capture_source(level, call_name)
 	end
 
 	-- Direct low-level use outside the theme loader has no source context. Keep the
-	-- old start-only fallback, but refine it too when a Lua parser is available.
+	-- start-only fallback, but refine it too when a Lua parser is available.
 	local info = debug.getinfo(level or 2, "Sl")
 	if info and type(info.source) == "string" and info.source:sub(1, 1) == "@" then
 		local file = vim.fs.normalize(info.source:sub(2))
@@ -391,7 +391,7 @@ local function trace_channel_api(family, api)
 				local info = debug.getinfo(2, "l")
 				local line = info and info.currentline > 0 and info.currentline or 1
 				operation._cf_source = source_from_range(current.file, line, take_pipeline_source(current, key, line))
-				operation._cf_debug = current.debug_visible or nil
+				operation._cf_color_trace = current.color_trace_visible or nil
 			end
 			return operation
 		end
@@ -399,14 +399,14 @@ local function trace_channel_api(family, api)
 	return out
 end
 
-function M._colortrace_mode(debug_enabled, picker_enabled_)
-	colortrace_debug_enabled = debug_enabled == true
+function M._colortrace_mode(color_trace_enabled_, picker_enabled_)
+	colortrace_enabled = color_trace_enabled_ == true
 	colortrace_picker_enabled = picker_enabled_ == true
 	if not colortrace_picker_enabled and source_range_cache_active then
 		source_range_cache = {}
 		source_range_cache_active = false
 	end
-	colortrace_active = colortrace_debug_enabled or colortrace_picker_enabled
+	colortrace_active = colortrace_enabled or colortrace_picker_enabled
 	if colortrace_active then
 		M.mix = trace_channel_api("mix", pipeline.mix)
 		M.opacity = trace_channel_api("opacity", pipeline.opacity)
@@ -761,9 +761,9 @@ local function apply_style_pipeline(style, operations, runtime_context, source)
 			local trace_source = colortrace and operation._cf_source or nil
 			if trace_source then
 				local trace
-				style.fg, style.bg, style.sp, trace, cfg, cbg = pipeline.debug_apply(
+				style.fg, style.bg, style.sp, trace, cfg, cbg = pipeline.color_trace_apply(
 					style.fg, style.bg, style.sp, operation, cfg, cbg)
-				colortrace._record(source, trace_source, trace, i, operation._cf_debug == true)
+				colortrace._record(source, trace_source, trace, i, operation._cf_color_trace == true)
 			else
 				single[1] = operation
 				style.fg, style.bg, style.sp, cfg, cbg = pipeline.apply(
@@ -844,7 +844,7 @@ end
 local function run_action(action)
 	local kind = action.kind
 	if kind == "resolver_style" then
-		resolver.resolve(
+		local warning = resolver.resolve(
 			action.type_name,
 			action.typemod,
 			action.style,
@@ -853,6 +853,13 @@ local function run_action(action)
 			action.clear,
 			action.typemod_style
 		)
+		if warning == "unresolved_literal" and action._cf_type_hint_source then
+			hint_unnecessary(
+				'type "' .. action.type_name .. '" uses literal fallback',
+				action._cf_type_hint_source,
+				{ kind = "type", name = action.type_name }
+			)
+		end
 	elseif kind == "resolver_link" then
 		resolver.link(
 			action.type_name,
@@ -1279,6 +1286,67 @@ local function has_typemod_actions(typemods)
 	return next(typemods) ~= nil
 end
 
+local function compile_scope_safe(actions, declaration_, compiler, ...)
+	-- Theme module setup() is already protected by cf.theme.execute(). Give each
+	-- independently compiled scope the same failure boundary so one invalid part
+	-- does not abort otherwise valid sibling work. Direct low-level use outside a
+	-- loaded .cf file keeps the existing assert contract.
+	if #source_stack == 0 then
+		return compiler(actions, declaration_, ...)
+	end
+
+	local action_count = #actions
+	local ok, err = pcall(compiler, actions, declaration_, ...)
+	if ok then
+		return true
+	end
+
+	-- Roll back only the scope owned by this call. Group callers therefore drop a
+	-- broken group, while nested typemod callers can preserve the valid group base
+	-- and sibling typemods around one broken entry.
+	for i = #actions, action_count + 1, -1 do
+		actions[i] = nil
+	end
+
+	if diagnostic._enabled("error") then
+		local record, report_err = diagnostic.report("error", {
+			message = tostring(err):match("([^\n]+)") or tostring(err),
+			source = refine_source_col(declaration_.source),
+		})
+		if not record then
+			vim.notify(tostring(report_err), vim.log.levels.ERROR)
+		end
+	end
+	return false
+end
+
+local function compile_raw_typemod(actions, declaration_, name, value, style, priority, where, clear)
+	validate_name(name, where .. ".typemods key")
+	local qmode, payload, qpriority = typemod_entry(
+		value,
+		style,
+		priority,
+		where .. ".typemods[" .. name .. "]",
+		declaration_.source
+	)
+	if qmode == "style" then
+		add_action(actions, qpriority, "raw_style", {
+			name = name,
+			style = payload,
+			clear = clear,
+		})
+	elseif qmode == "link" then
+		assert(payload ~= name, where .. ".typemods cannot self-link " .. name)
+		add_action(actions, qpriority, "raw_link", {
+			name = name,
+			target = payload,
+			clear = clear,
+		})
+	elseif qmode == "clear" then
+		add_action(actions, qpriority, "raw_clear", { name = name })
+	end
+end
+
 local function compile_raw_group(actions, declaration_)
 	local where = "cf.hl.setup: raw:group(" .. tostring(declaration_.name) .. ")"
 	local spec = declaration_.spec
@@ -1327,30 +1395,49 @@ local function compile_raw_group(actions, declaration_)
 
 	if spec.typemods then
 		for name, value in pairs(spec.typemods) do
-			validate_name(name, where .. ".typemods key")
-			local qmode, payload, qpriority = typemod_entry(
-				value,
-				style,
-				priority,
-				where .. ".typemods[" .. name .. "]",
-				declaration_.source
-			)
-			if qmode == "style" then
-				add_action(actions, qpriority, "raw_style", {
-					name = name,
-					style = payload,
-					clear = clear,
-				})
-			elseif qmode == "link" then
-				assert(payload ~= name, where .. ".typemods cannot self-link " .. name)
-				add_action(actions, qpriority, "raw_link", {
-					name = name,
-					target = payload,
-					clear = clear,
-				})
-			elseif qmode == "clear" then
-				add_action(actions, qpriority, "raw_clear", { name = name })
-			end
+			compile_scope_safe(actions, declaration_, compile_raw_typemod, name, value, style, priority, where, clear)
+		end
+	end
+end
+
+local function compile_resolved_typemod(actions, declaration_, typemod, value, names, style, priority, where, filetype, targets, clear)
+	validate_name(typemod, where .. ".typemods key")
+	local qmode, payload, qpriority, typemod_style = typemod_entry(
+		value,
+		style,
+		priority,
+		where .. ".typemods[" .. typemod .. "]",
+		declaration_.source
+	)
+
+	for i = 1, #names do
+		local type_name = names[i]
+		if qmode == "style" then
+			add_action(actions, qpriority, "resolver_style", {
+				type_name = type_name,
+				typemod = typemod,
+				typemod_style = typemod_style,
+				style = payload,
+				filetype = filetype,
+				targets = targets,
+				clear = clear,
+			})
+		elseif qmode == "link" then
+			add_action(actions, qpriority, "resolver_link", {
+				type_name = type_name,
+				typemod = typemod,
+				target_type = payload,
+				filetype = filetype,
+				targets = targets,
+				clear = clear,
+			})
+		elseif qmode == "clear" then
+			add_action(actions, qpriority, "resolver_clear", {
+				type_name = type_name,
+				typemod = typemod,
+				filetype = filetype,
+				clear = CLEAR_ALL,
+			})
 		end
 	end
 end
@@ -1380,13 +1467,16 @@ local function compile_resolved_group(actions, declaration_, filetype, module_ta
 	end
 
 	if mode == "style" then
-		add_action(actions, priority, "resolver_style", {
+		local action = add_action(actions, priority, "resolver_style", {
 			type_name = names[1],
 			style = style,
 			filetype = filetype,
 			targets = targets,
 			clear = clear,
 		})
+		if diagnostic._enabled("hint") then
+			action._cf_type_hint_source = declaration_.source
+		end
 	elseif mode == "link" then
 		assert(spec.link ~= names[1], where .. " cannot link a group to itself")
 		add_action(actions, priority, "resolver_link", {
@@ -1414,45 +1504,10 @@ local function compile_resolved_group(actions, declaration_, filetype, module_ta
 
 	if spec.typemods then
 		for typemod, value in pairs(spec.typemods) do
-			validate_name(typemod, where .. ".typemods key")
-			local qmode, payload, qpriority, typemod_style = typemod_entry(
-				value,
-				style,
-				priority,
-				where .. ".typemods[" .. typemod .. "]",
-				declaration_.source
+			compile_scope_safe(
+				actions, declaration_, compile_resolved_typemod,
+				typemod, value, names, style, priority, where, filetype, targets, clear
 			)
-
-			for i = 1, #names do
-				local type_name = names[i]
-				if qmode == "style" then
-					add_action(actions, qpriority, "resolver_style", {
-						type_name = type_name,
-						typemod = typemod,
-						typemod_style = typemod_style,
-						style = payload,
-						filetype = filetype,
-						targets = targets,
-						clear = clear,
-					})
-				elseif qmode == "link" then
-					add_action(actions, qpriority, "resolver_link", {
-						type_name = type_name,
-						typemod = typemod,
-						target_type = payload,
-						filetype = filetype,
-						targets = targets,
-						clear = clear,
-					})
-				elseif qmode == "clear" then
-					add_action(actions, qpriority, "resolver_clear", {
-						type_name = type_name,
-						typemod = typemod,
-						filetype = filetype,
-						clear = CLEAR_ALL,
-					})
-				end
-			end
 		end
 	end
 end
@@ -1531,7 +1586,7 @@ local function compile_language_module(language, spec, source)
 		error_source_hint = declaration_.source
 		if declaration_.kind == "raw" then
 			if declaration_.action == "group" then
-				compile_raw_group(actions, declaration_)
+				compile_scope_safe(actions, declaration_, compile_raw_group)
 			else
 				validate_name(declaration_.name, "cf.hl.setup: raw:link source")
 				validate_name(declaration_.target, "cf.hl.setup: raw:link target")
@@ -1543,7 +1598,10 @@ local function compile_language_module(language, spec, source)
 				})
 			end
 		elseif declaration_.action == "group" then
-			compile_resolved_group(actions, declaration_, language, spec.style_targets, spec.style_targets_clear, "l", false)
+			compile_scope_safe(
+				actions, declaration_, compile_resolved_group,
+				language, spec.style_targets, spec.style_targets_clear, "l", false
+			)
 		else
 			validate_name(declaration_.name, "cf.hl.setup: l:link source")
 			validate_name(declaration_.target, "cf.hl.setup: l:link target")
@@ -1607,7 +1665,7 @@ local function compile_resolved_module(kind, name, spec, source)
 		error_source_hint = declaration_.source
 		if declaration_.kind == "raw" then
 			if declaration_.action == "group" then
-				compile_raw_group(actions, declaration_)
+				compile_scope_safe(actions, declaration_, compile_raw_group)
 			else
 				validate_name(declaration_.name, "cf.hl.setup: raw:link source")
 				validate_name(declaration_.target, "cf.hl.setup: raw:link target")
@@ -1619,7 +1677,10 @@ local function compile_resolved_module(kind, name, spec, source)
 				})
 			end
 		elseif declaration_.action == "group" then
-			compile_resolved_group(actions, declaration_, nil, module_targets, spec.style_targets_clear, prefix, kind == "plugin" and not explicit_module_targets)
+			compile_scope_safe(
+				actions, declaration_, compile_resolved_group,
+				nil, module_targets, spec.style_targets_clear, prefix, kind == "plugin" and not explicit_module_targets
+			)
 		else
 			if kind == "plugin" then
 				assert(explicit_module_targets, "cf.hl.setup: p:link() requires module style_targets")
@@ -1735,10 +1796,10 @@ function M._source_begin(path)
 	local normalized = vim.fs.normalize(path)
 	local picker = picker_enabled()
 	local trace_enabled = false
-	local debug_visible = false
+	local color_trace_visible = false
 	local colortrace = colortrace_active and package.loaded["cf.colortrace"] or nil
 	if colortrace then
-		trace_enabled, debug_visible = colortrace._source_mode(normalized)
+		trace_enabled, color_trace_visible = colortrace._source_mode(normalized)
 		colortrace._source_begin(normalized)
 	end
 	local ranges_enabled = picker or trace_enabled
@@ -1748,7 +1809,7 @@ function M._source_begin(path)
 		range_used = picker and {} or nil,
 		pipeline_range_used = trace_enabled and {} or nil,
 		trace_enabled = trace_enabled,
-		debug_visible = debug_visible,
+		color_trace_visible = color_trace_visible,
 		ranges_loaded = false,
 	}
 	return #source_stack

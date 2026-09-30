@@ -12,7 +12,6 @@ assert(diagnostic.tag.DEPRECATED == "deprecated")
 assert(diagnostic.tag.UNNECESSARY == "unnecessary")
 
 local ok, err = diagnostic.configure({
-	debug = false,
 	severity_bias = 0,
 	severity = { hint = true, warn = true, error = true },
 	messages = { info = true, ok = true },
@@ -58,13 +57,6 @@ local hidden_warn = assert(diagnostic.report("warn", {
 }))
 assert(diagnostic.output_form(hidden_warn) == diagnostic.form.ASSERT)
 
-local debug_only = assert(diagnostic.report("warn", {
-	message = "debug-only resolver detail",
-	debug = true,
-	source = { file = visible_file, line = 1, col = 1 },
-}))
-assert(diagnostic.visible(debug_only) == false)
-
 local user_info = assert(diagnostic.info({
 	message = 'theme "dark" selected',
 	source = { file = visible_file, line = 1, col = 1 },
@@ -93,34 +85,40 @@ end
 
 local rendered = diagnostic.flush()
 vim.notify = original_notify
-assert(rendered == 4) -- visible hint + two ASSERT fallbacks + INFO; debug-only filtered.
+assert(rendered == 4) -- visible hint + visible INFO + two ASSERT fallbacks.
 
 local ns = api.nvim_create_namespace("cf.nvim.diagnostic")
 local current = vim.diagnostic.get(visible_buf, { namespace = ns })
-assert(#current == 1)
-assert(current[1].severity == vim.diagnostic.severity.HINT)
-assert(current[1].lnum == 1 and current[1].col == 2)
-assert(#notifications == 3) -- two off-tab ASSERT fallbacks + INFO.
-assert(notifications[1].message:find(other_tab_file, 1, true) or notifications[2].message:find(other_tab_file, 1, true))
+assert(#current == 2)
+local saw_hint = false
+local saw_info = false
+for i = 1, #current do
+	if current[i].severity == vim.diagnostic.severity.HINT then
+		saw_hint = current[i].lnum == 1 and current[i].col == 2
+	elseif current[i].severity == vim.diagnostic.severity.INFO then
+		saw_info = current[i].message == 'theme "dark" selected'
+	end
+end
+assert(saw_hint, "visible HINT diagnostic missing")
+assert(saw_info, "visible INFO message was not rendered in-buffer")
+assert(#notifications == 1) -- one batched ASSERT fallback; visible INFO stays in-buffer.
+local batched_assert
+for i = 1, #notifications do
+	local message = notifications[i].message
+	if message:find(other_tab_file, 1, true) or message:find(hidden_file, 1, true) then
+		batched_assert = notifications[i]
+	end
+end
+assert(batched_assert, "ASSERT fallbacks were not rendered")
+assert(batched_assert.message:find(other_tab_file, 1, true), "other-tab ASSERT missing from batch")
+assert(batched_assert.message:find(hidden_file, 1, true), "hidden ASSERT missing from batch")
+assert(batched_assert.level == vim.log.levels.ERROR, "batched ASSERT did not keep highest severity")
 
 -- A clean cycle must clear old in-buffer diagnostics.
 assert(diagnostic.flush() == 0)
 assert(#vim.diagnostic.get(visible_buf, { namespace = ns }) == 0)
 
--- Debug mode opens all normal gates.
-assert(diagnostic.configure({
-	debug = true,
-	severity = { hint = false, warn = false, error = false },
-	messages = { info = false, ok = false },
-}))
-local debug_warn = assert(diagnostic.report("warn", {
-	message = "visible in debug",
-	debug = true,
-	source = { file = visible_file, line = 1, col = 1 },
-}))
-assert(diagnostic.visible(debug_warn) == true)
-
-assert(#diagnostic.history() >= 6)
+assert(#diagnostic.history() >= 4)
 diagnostic.clear()
 assert(#diagnostic.pending() == 0)
 assert(#diagnostic.history() == 0)

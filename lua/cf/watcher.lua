@@ -102,7 +102,7 @@ end
 
 -- fs_event is deliberately not recursive. Theme directories watch normal .cf
 -- files and only the runtime child directory name; runtime/*.cf has a dedicated
--- handle so adding runtime support does not change the old module watch policy.
+-- handle so normal module files and runtime modules keep separate watch scopes.
 local function watch_directory(path, scope, watch_runtime_child)
 	local stat = uv.fs_stat(path)
 	if not stat or stat.type ~= "directory" then

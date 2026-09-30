@@ -82,10 +82,10 @@ for _, case in ipairs(cases) do
 		equal(style.bg, bg, "cbg changed bg")
 		equal(style.sp, sp, "cterm changed sp")
 		equal(spec[field], nil, "mutated declaration")
-		local df, db, ds, trace, cfg, cbg = pipeline.debug_apply(fg, bg, sp, spec.pipeline[1])
+		local df, db, ds, trace, cfg, cbg = pipeline.color_trace_apply(fg, bg, sp, spec.pipeline[1])
 		equal(df, fg); equal(db, bg); equal(ds, sp)
 		equal(trace.channel, cchannel)
-		equal(color.to_cterm(channel == "fg" and cfg or cbg), expected, "debug result")
+		equal(color.to_cterm(channel == "fg" and cfg or cbg), expected, "ColorTrace result")
 		assert(pipeline[name].csp == nil)
 	end
 end
@@ -188,11 +188,11 @@ equal(current().ctermfg, color.to_cterm(color.darken(color.from_cterm(46), 50)),
 r.reset(target)
 equal(current().ctermfg, 196)
 
--- Debug tracing recognizes the additional builders without involving the picker.
-local trace_path = root .. "/only/debug.cf"
+-- ColorTrace recognizes the additional builders without involving the picker.
+local trace_path = root .. "/only/colortrace.cf"
 vim.fn.writefile({
 	"local h = require('cf.hl.setup')",
-	"return h.ui.setup({ h.raw:group('CFTermDebug', {",
+	"return h.ui.setup({ h.raw:group('CFTermColorTrace', {",
 	" fg = h.colors.fg, bg = h.colors.bg,",
 	" pipeline = {",
 	"  h.lighten.cfg(10),",
@@ -202,29 +202,28 @@ vim.fn.writefile({
 }, trace_path)
 local diagnostic = require("cf.diagnostic")
 local colortrace = require("cf.colortrace")
-diagnostic.configure({ debug = true })
-colortrace.set_debug(true)
+colortrace.set_enabled(true)
 local buf = vim.fn.bufadd(trace_path)
 vim.fn.bufload(buf)
 vim.api.nvim_win_set_buf(0, buf)
 local recorded = {}
 local record = colortrace._record
-colortrace._record = function(owner, source, trace, index, debug_)
+colortrace._record = function(owner, source, trace, index, emit_color_trace)
 	recorded[#recorded + 1] = { source = source, trace = trace }
-	return record(owner, source, trace, index, debug_)
+	return record(owner, source, trace, index, emit_color_trace)
 end
 theme.load(root)
 colortrace._record = record
-equal(#recorded, 2, "debug wrapper count")
+equal(#recorded, 2, "ColorTrace wrapper count")
 equal(recorded[1].trace.channel, "cfg")
 equal(recorded[2].trace.channel, "cbg")
 equal(recorded[1].source.line, 5, "cfg source location")
 equal(recorded[2].source.line, 6, "cbg source location")
-local traced = vim.api.nvim_get_hl(0, { name = "CFTermDebug", link = false })
+local traced = vim.api.nvim_get_hl(0, { name = "CFTermColorTrace", link = false })
 equal(traced.ctermfg, color.to_cterm(color.lighten(fg, 10)))
 equal(traced.ctermbg, color.to_cterm(color.darken(bg, 5)))
 equal(traced.fg, fg - 0xFF000000); equal(traced.bg, bg - 0xFF000000)
-colortrace.set_debug(false)
+colortrace.set_enabled(false)
 diagnostic.clear()
 vim.fn.delete(root, "rf")
 print("cf.nvim cterm tests: OK")

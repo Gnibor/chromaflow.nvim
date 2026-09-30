@@ -404,16 +404,7 @@ local function refresh_consumers()
 	vim.cmd("redraw!")
 end
 
-function M.compile(root)
-	assert(type(root) == "string" and root ~= "", "cf.theme.compile: theme_path must be a non-empty string")
-	root = normalize(root)
-	assert(is_dir(root), "cf.theme: theme_path is not a directory: " .. root)
-
-	local colortrace = package.loaded["cf.colortrace"]
-	if colortrace then
-		colortrace._compile_begin()
-	end
-
+local function compile_theme(root)
 	local default_name, active_name = theme_names(root)
 	assert(default_name ~= RUNTIME_DIR, "cf.theme: 'runtime' cannot be the default theme name")
 	assert(active_name ~= RUNTIME_DIR, "cf.theme: 'runtime' cannot be the active theme name")
@@ -525,10 +516,27 @@ function M.compile(root)
 		runtime_state._validate_compiled(compiled)
 	end
 
-	if colortrace then
-		colortrace._compile_finish(compiled)
-	end
 	return compiled
+end
+
+function M.compile(root)
+	assert(type(root) == "string" and root ~= "", "cf.theme.compile: theme_path must be a non-empty string")
+	root = normalize(root)
+	assert(is_dir(root), "cf.theme: theme_path is not a directory: " .. root)
+
+	local colortrace = package.loaded["cf.colortrace"]
+	if not colortrace then
+		return compile_theme(root)
+	end
+
+	colortrace._compile_begin()
+	local ok, compiled_or_err = pcall(compile_theme, root)
+	if not ok then
+		colortrace._compile_abort()
+		error(compiled_or_err, 0)
+	end
+	colortrace._compile_finish(compiled_or_err)
+	return compiled_or_err
 end
 
 function M.load_runtime(compiled, name)
@@ -625,9 +633,9 @@ end
 
 -- Re-execute exactly one module from the currently applied theme. Outside the
 -- active/fallback compile phase this only rebuilds that module, which is enough
--- for debug trace producers; it does not apply highlight actions or touch the
--- active-module registry.
-function M.debug_file(path)
+-- for on-view diagnostics/ColorTrace; it does not apply highlight actions or
+-- touch the active-module registry.
+function M.color_trace_file(path)
 	if not current or type(current.module_files) ~= "table" then return false end
 	local normalized = normalize(path)
 	for i = 1, #current.module_files do

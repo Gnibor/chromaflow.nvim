@@ -89,7 +89,7 @@ local function apply_one(value, opcode, a, b, backdrop, cterm)
 	error("cf.hl.pipeline: unknown pipeline opcode", 3)
 end
 
-function M.debug_apply(fg, bg, sp, operation, cfg, cbg)
+function M.color_trace_apply(fg, bg, sp, operation, cfg, cbg)
 	assert(type(operation) == "table", "cf.hl.pipeline: pipeline entry must be an operation")
 
 	local opcode = operation[1]

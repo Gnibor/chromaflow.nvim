@@ -149,7 +149,7 @@ function M.open(opts)
 		local cached_sources = cached and cached.by_source or {}
 		for i, step in ipairs(draft.steps) do
 			local trace
-			fg, bg, sp, trace, cfg, cbg = pipeline.debug_apply(fg, bg, sp, step.op, cfg, cbg)
+			fg, bg, sp, trace, cfg, cbg = pipeline.color_trace_apply(fg, bg, sp, step.op, cfg, cbg)
 			traces[i] = trace
 			local original = step.original and original_ops[step.original]
 			local pos = original and original._cf_source

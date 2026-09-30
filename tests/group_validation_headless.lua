@@ -6,7 +6,6 @@ local runtime = require("cf.hl.runtime")
 local theme = require("cf.theme")
 
 assert(diagnostic.configure({
-	debug = false,
 	severity_bias = 0,
 	severity = { hint = true, warn = true, error = true },
 }))
@@ -42,16 +41,12 @@ vim.fn.writefile({
 	"  l:group('parameter', {",
 	"    not_a_highlight_field = true,",
 	"    style_targets = { vim = false, ts = true, lsp = false },",
-	"    typemods = {",
-	"      cf_independent_mod = { italic = true },",
-	"    },",
+	"    typemods = { cf_independent_mod = { italic = true } },",
 	"  }),",
 	"  l:group('variable', {",
 	"    style_targets = { vim = false, ts = true, lsp = false },",
 	"    pipeline = { hl.lighten.fg(5) },",
-	"    typemods = {",
-	"      cf_missing_mod = { fg = '#224466', pipeline = { hl.lighten.fg(5) } },",
-	"    },",
+	"    typemods = { cf_missing_mod = { fg = '#224466', pipeline = { hl.lighten.fg(5) } } },",
 	"  }),",
 	"})",
 }, module_path)
@@ -59,62 +54,48 @@ vim.fn.writefile({
 local compiled = assert(theme.load(root))
 local validation_file
 for _, file in ipairs(compiled.module_files) do
-	if file.name == "validation.cf" then
-		validation_file = file
-		break
-	end
+	if file.name == "validation.cf" then validation_file = file break end
 end
 assert(validation_file, "validation module missing from compiled file list")
-assert(validation_file.failed ~= true, "local group validation still failed the complete module")
+assert(validation_file.failed ~= true, "one invalid declaration incorrectly failed the complete module")
 
-assert(runtime.group_style("CFValidationBefore") ~= nil, "declaration before invalid typemod was lost")
-assert(runtime.group_style("CFValidationAfter") ~= nil, "declaration after invalid typemod was lost")
+-- A broken nested typemod owns only its own rollback scope.
+assert(runtime.group_style("CFValidationBefore") ~= nil, "declaration before broken typemod was lost")
+assert(runtime.group_style("CFValidationAfter") ~= nil, "declaration after broken typemod was lost")
 assert(runtime.group_style("CFValidationPartial") ~= nil, "valid group base was lost because one typemod was invalid")
 assert(runtime.group_style("CFValidationGood") ~= nil, "valid typemod sibling was lost")
 assert(runtime.group_style("CFValidationBroken") == nil, "invalid typemod leaked a partial action")
-assert(runtime.group_style("CFValidationBadTypemods") ~= nil, "invalid typemods field incorrectly discarded the valid base")
-assert(runtime.group_style("CFValidationBadTypes") ~= nil, "invalid types alias incorrectly discarded the primary group")
-assert(vim.api.nvim_get_hl(0, { name = "CFValidationAliasA", link = true, create = false }).link == "CFValidationBadTypes", "valid types alias before an invalid alias was lost")
-assert(vim.api.nvim_get_hl(0, { name = "CFValidationAliasB", link = true, create = false }).link == "CFValidationBadTypes", "valid types alias after an invalid alias was lost")
-assert(runtime.group_style("@function.lua") ~= nil, "style without a color was incorrectly rejected")
-assert(runtime.group_style("@parameter.lua") == nil, "invalid base style unexpectedly materialized")
-assert(next(vim.api.nvim_get_hl(0, { name = "@variable.parameter.cf_independent_mod.lua", link = true, create = false })) ~= nil, "independent colorless typemod was lost with an invalid base")
 
--- Missing colour is not a group error. Only this concrete pipeline operation is
--- invalid because it asks to manipulate fg when neither the group nor an
--- inherited style provides fg. The independent typemod still survives because
--- a typemod carrying its own fg+pipeline is independent and must still survive.
-assert(runtime.group_style("@variable.lua") == nil, "invalid pipeline-only base unexpectedly materialized")
-assert(runtime.group_style("@variable.cf_missing_mod.lua") ~= nil, "independent unresolved typemod was not materialized")
+-- Invalid group-level structure invalidates that declaration as a unit. There is
+-- no trustworthy partial meaning for a non-table typemods field or malformed types array.
+assert(runtime.group_style("CFValidationBadTypemods") == nil, "invalid typemods container leaked a partial group")
+assert(runtime.group_style("CFValidationBadTypes") == nil, "invalid types array leaked a partial group")
+assert(next(vim.api.nvim_get_hl(0, { name = "CFValidationAliasA", link = true, create = false })) == nil, "invalid types array leaked alias A")
+assert(next(vim.api.nvim_get_hl(0, { name = "CFValidationAliasB", link = true, create = false })) == nil, "invalid types array leaked alias B")
 
-local bad_typemod_error
-local missing_base_error
-local unresolved_hint
+-- A style does not require a colour: pure attributes remain valid.
+assert(next(vim.api.nvim_get_hl(0, { name = "@function.lua", link = false, create = false })) ~= nil, "colorless style was incorrectly rejected")
+
+-- A broken base invalidates its complete declaration, including nested typemods.
+assert(next(vim.api.nvim_get_hl(0, { name = "@parameter.lua", link = true, create = false })) == nil, "invalid base style unexpectedly materialized")
+assert(next(vim.api.nvim_get_hl(0, { name = "@variable.parameter.cf_independent_mod.lua", link = true, create = false })) == nil, "typemod escaped an invalid base declaration")
+assert(next(vim.api.nvim_get_hl(0, { name = "@variable.lua", link = true, create = false })) == nil, "invalid pipeline-only base unexpectedly materialized")
+assert(next(vim.api.nvim_get_hl(0, { name = "@variable.cf_missing_mod.lua", link = true, create = false })) == nil, "typemod escaped an invalid pipeline base declaration")
+
+local messages = {}
 for _, record in ipairs(diagnostic.history()) do
-	if record.source.file == vim.fs.normalize(module_path) then
-		if record.severity == diagnostic.severity.ERROR
-			and record.source.line == 6
-			and record.message:find("not_a_highlight_field", 1, true)
-		then
-			bad_typemod_error = record
-		elseif record.severity == diagnostic.severity.ERROR
-			and record.message:find("fg has no color to manipulate", 1, true)
-		then
-			missing_base_error = record
-		elseif record.severity == diagnostic.severity.HINT
-			and record.message:find("cf_missing_mod", 1, true)
-			and record.message:find("literal fallback", 1, true)
-		then
-			unresolved_hint = record
-		end
+	if record.source.file == vim.fs.normalize(module_path) and record.severity == diagnostic.severity.ERROR then
+		messages[#messages + 1] = record.message
 	end
 end
-
-assert(bad_typemod_error, "invalid typemod did not enqueue an ERROR diagnostic")
-assert(bad_typemod_error.source.line == 6, "invalid typemod diagnostic lost the group source line")
-assert(missing_base_error, "pipeline operation without its required colour did not enqueue an ERROR diagnostic")
-assert(unresolved_hint, "unresolved typemod did not enqueue a HINT diagnostic")
-assert(not vim.tbl_contains(unresolved_hint.tags, diagnostic.tag.UNNECESSARY), "unresolved literal hint was incorrectly tagged UNNECESSARY")
+local function has_message(fragment)
+	for i = 1, #messages do if messages[i]:find(fragment, 1, true) then return true end end
+	return false
+end
+assert(has_message("not_a_highlight_field"), "invalid highlight field did not report an ERROR")
+assert(has_message("typemods must be a table"), "invalid typemods container did not report an ERROR")
+assert(has_message("types entry"), "invalid types array did not report an ERROR")
+assert(has_message("fg has no color to manipulate"), "invalid pipeline base did not report an ERROR")
 
 vim.fn.delete(root, "rf")
 print("cf.nvim group validation tests: OK")

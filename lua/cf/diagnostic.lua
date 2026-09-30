@@ -5,9 +5,9 @@ local diag_ns = api.nvim_create_namespace("cf.nvim.diagnostic")
 local float_ns = api.nvim_create_namespace("cf.nvim.diagnostic.float")
 local span_groups = {}
 
--- Diagnostics deliberately use a sparse internal scale. The public meaning is
--- only HINT/WARN/ERROR; the gaps are reserved so a future/global bias can move
--- every diagnostic up or down without changing the producer's base severity.
+-- Diagnostics deliberately use a sparse internal scale. The public severities
+-- are HINT/WARN/ERROR; the gaps give severity_bias room to move an effective
+-- severity without changing the producer's base severity.
 M.severity = {
 	HINT = 64,
 	WARN = 128,
@@ -41,7 +41,6 @@ local severity_by_name = {
 }
 
 local policy = {
-	debug = false,
 	severity_bias = 0,
 	severity = {
 		hint = true,
@@ -166,13 +165,6 @@ local function normalize_tags(tags)
 	return out
 end
 
-local function normalize_debug(value)
-	if value ~= nil and type(value) ~= "boolean" then
-		return fail("debug must be true, false or nil")
-	end
-	return value
-end
-
 local function normalize_severity(value)
 	if type(value) == "string" then
 		local result = severity_by_name[value:lower()]
@@ -225,11 +217,6 @@ local function normalize_common(data)
 		return nil, tags_err
 	end
 
-	local debug, debug_err = normalize_debug(data.debug)
-	if debug_err then
-		return nil, debug_err
-	end
-
 	local code = data.code
 	if code ~= nil and type(code) ~= "string" and not is_integer(code) then
 		return fail("code must be a string, integer or nil")
@@ -240,7 +227,6 @@ local function normalize_common(data)
 		source = source,
 		context = context,
 		tags = tags,
-		debug = debug,
 		code = code,
 		data = data.data,
 	}
@@ -267,18 +253,10 @@ function M.configure(opts)
 	end
 
 	local next_policy = {
-		debug = policy.debug,
 		severity_bias = policy.severity_bias,
 		severity = copy_table(policy.severity),
 		messages = copy_table(policy.messages),
 	}
-
-	if opts.debug ~= nil then
-		if type(opts.debug) ~= "boolean" then
-			return false, "cf.diagnostic: debug must be boolean"
-		end
-		next_policy.debug = opts.debug
-	end
 
 	if opts.severity_bias ~= nil then
 		if not is_integer(opts.severity_bias) then
@@ -341,7 +319,7 @@ local function span_group(hex)
 		span_groups[key] = group
 	end
 	-- :hi clear during a theme reload removes custom definitions. Reapply the
-	-- tiny swatch definition only when a debug float is actually opened.
+	-- tiny swatch definition only when a diagnostic float actually needs it.
 	api.nvim_set_hl(0, group, {
 		fg = contrast_foreground(hex),
 		bg = hex,
@@ -419,7 +397,6 @@ end
 
 function M.policy()
 	return {
-		debug = policy.debug,
 		severity_bias = policy.severity_bias,
 		severity = copy_table(policy.severity),
 		messages = copy_table(policy.messages),
@@ -442,14 +419,7 @@ function M.classify(value)
 end
 
 
-function M._enabled(severity, debug_only)
-	if policy.debug then
-		return true
-	end
-	if debug_only == true then
-		return false
-	end
-
+function M._enabled(severity)
 	local normalized = severity
 	if type(normalized) == "string" then
 		normalized = severity_by_name[normalized:lower()]
@@ -509,7 +479,7 @@ end
 
 -- INFO/OK are explicit user messages and intentionally do not participate in
 -- diagnostic severity or severity_bias.
-function M.user_message(kind, data)
+local function push_message(kind, data, policy_controlled)
 	local normalized_kind, kind_err = normalize_message_kind(kind)
 	if not normalized_kind then
 		return nil, kind_err
@@ -521,11 +491,22 @@ function M.user_message(kind, data)
 
 	common.form = M.form.MESSAGE
 	common.kind = normalized_kind
+	common.message_policy = policy_controlled ~= false
 	return push(common)
+end
+
+function M.user_message(kind, data)
+	return push_message(kind, data, true)
 end
 
 function M.info(data)
 	return M.user_message(M.message.INFO, data)
+end
+
+-- ColorTrace owns its visibility through diagnostic.color_trace. Keep its INFO
+-- records independent from the normal diagnostic.messages.info user-message gate.
+function M._trace_info(data)
+	return push_message(M.message.INFO, data, false)
 end
 
 function M.ok(data)
@@ -544,13 +525,6 @@ function M.assertion(data)
 end
 
 local function is_visible(record)
-	if policy.debug then
-		return true
-	end
-	if record.debug == true then
-		return false
-	end
-
 	if record.form == M.form.DIAGNOSTIC then
 		local effective = M.effective_severity(record.severity)
 		local class = M.classify(effective)
@@ -558,7 +532,7 @@ local function is_visible(record)
 	end
 
 	if record.form == M.form.MESSAGE then
-		return policy.messages[record.kind] == true
+		return record.message_policy == false or policy.messages[record.kind] == true
 	end
 
 	return false
@@ -633,9 +607,6 @@ function M.output_form(record)
 	if current_tab_buffer(record.source.file) then
 		return M.form.DIAGNOSTIC
 	end
-	if record.debug == true then
-		return nil
-	end
 	return M.form.ASSERT
 end
 
@@ -651,6 +622,24 @@ local function vim_severity(record)
 	return vim.diagnostic.severity.HINT
 end
 
+
+local function buffer_item(record)
+	local severity = vim.diagnostic.severity.INFO
+	if record.form == M.form.DIAGNOSTIC then
+		severity = vim_severity(record)
+	end
+	return {
+		lnum = record.source.line - 1,
+		col = record.source.col - 1,
+		end_lnum = record.source.end_line and (record.source.end_line - 1) or nil,
+		end_col = record.source.end_col and (record.source.end_col - 1) or nil,
+		message = record.message,
+		severity = severity,
+		source = context_prefix(record.context) or "cf.nvim",
+		code = record.code or record.id,
+		user_data = { cf = record },
+	}
+end
 local function notify_level(record)
 	if record.form == M.form.DIAGNOSTIC then
 		local class = M.classify(M.effective_severity(record.severity))
@@ -691,39 +680,34 @@ function M.flush()
 	end
 
 	local by_buf = {}
+	local assert_messages = {}
+	local assert_level = vim.log.levels.INFO
 	local rendered = 0
 
 	for i = 1, #pending do
 		local record = pending[i]
 		if is_visible(record) then
-			if record.form == M.form.DIAGNOSTIC then
-				local bufnr = current_tab_buffer(record.source.file)
-				if bufnr then
-					local list = by_buf[bufnr]
-					if not list then
-						list = {}
-						by_buf[bufnr] = list
-					end
-					list[#list + 1] = {
-						lnum = record.source.line - 1,
-						col = record.source.col - 1,
-						end_lnum = record.source.end_line and (record.source.end_line - 1) or nil,
-						end_col = record.source.end_col and (record.source.end_col - 1) or nil,
-						message = record.message,
-						severity = vim_severity(record),
-						source = context_prefix(record.context) or "cf.nvim",
-						code = record.code or record.id,
-						user_data = { cf = record },
-					}
-				elseif record.debug ~= true then
-					local text = M.format(record)
-					vim.notify(text, notify_level(record), { title = "ChromaFlow" })
+			local bufnr = current_tab_buffer(record.source.file)
+			if bufnr then
+				local list = by_buf[bufnr]
+				if not list then
+					list = {}
+					by_buf[bufnr] = list
 				end
+				list[#list + 1] = buffer_item(record)
+				rendered = rendered + 1
+			elseif record.form == M.form.DIAGNOSTIC then
+				assert_messages[#assert_messages + 1] = M.format(record)
+				local level = notify_level(record)
+				if level > assert_level then
+					assert_level = level
+				end
+				rendered = rendered + 1
 			else
 				local text = M.format(record)
 				vim.notify(text, notify_level(record), { title = "ChromaFlow" })
+				rendered = rendered + 1
 			end
-			rendered = rendered + 1
 		end
 	end
 
@@ -732,12 +716,16 @@ function M.flush()
 		rendered_buffers[bufnr] = true
 	end
 
+	if assert_messages[1] ~= nil then
+		vim.notify(table.concat(assert_messages, "\n\n"), assert_level, { title = "ChromaFlow" })
+	end
+
 	clear_table(pending)
 	return rendered
 end
 
--- Flush only records belonging to one visible source buffer. This is used by
--- the debug-on-view seed path so opening one .cf file does not reset diagnostics
+-- Flush only records belonging to one visible source buffer. The ColorTrace
+-- on-view seed path uses this so opening one .cf file does not reset diagnostics
 -- already rendered for other visible theme files.
 function M.flush_buffer(bufnr)
 	assert(type(bufnr) == "number" and api.nvim_buf_is_valid(bufnr), "cf.diagnostic.flush_buffer: invalid buffer")
@@ -755,18 +743,8 @@ function M.flush_buffer(bufnr)
 	for i = 1, #pending do
 		local record = pending[i]
 		if vim.fs.normalize(record.source.file) == name then
-			if is_visible(record) and record.form == M.form.DIAGNOSTIC then
-				list[#list + 1] = {
-					lnum = record.source.line - 1,
-					col = record.source.col - 1,
-					end_lnum = record.source.end_line and (record.source.end_line - 1) or nil,
-					end_col = record.source.end_col and (record.source.end_col - 1) or nil,
-					message = record.message,
-					severity = vim_severity(record),
-					source = context_prefix(record.context) or "cf.nvim",
-					code = record.code or record.id,
-					user_data = { cf = record },
-				}
+			if is_visible(record) then
+				list[#list + 1] = buffer_item(record)
 				rendered = rendered + 1
 			end
 		else

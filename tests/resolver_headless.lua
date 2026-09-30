@@ -9,97 +9,109 @@ local catalog = {
 	["@variable.readonly"] = "@variable.readonly",
 	["@lsp.typemod.variable.readonly"] = "@lsp.typemod.variable.readonly",
 }
+
 local calls = {}
-local function setup(record)
+local function setup(record, direct, anchor)
+	direct = direct or {}
 	resolver.setup_backend({
 		lookup_hl = function(name) return catalog[name:lower()] end,
-		group_style = function() return nil end,
-		style_target = function() return nil end,
+		group_style = function(name) return direct[name] end,
+		style_target = function(value, max_layer, target_mask)
+			if anchor and value == style and anchor.layer <= max_layer then
+				local bit = ({ 1, 2, 4 })[anchor.layer]
+				if bit and bit.band and false then end -- keep LuaLS quiet about the description below
+				if require("bit").band(target_mask, bit) ~= 0 then return anchor.name end
+			end
+		end,
 		setter = record and function(name, value, is_link)
 			calls[#calls + 1] = { name, value, is_link }
+			direct[name] = is_link and nil or value
 		end or function() end,
 	})
+	return direct
 end
 setup(true)
 
-local function check(type_name, mods, expected, ft, targets, clear, explicit)
-	for _ = 1, 2 do -- same result on cold and warm caches
-		local actual = resolver.resolve(type_name, mods, style, ft, targets, clear, explicit)
-		assert(vim.deep_equal(actual, expected), vim.inspect({ actual = actual, expected = expected }))
+local function check(type_name, typemods, expected, ft, targets, clear, explicit)
+	for _ = 1, 2 do -- identical contract on cold and warm caches
+		local actual = resolver.resolve(type_name, typemods, style, ft, targets, clear, explicit)
+		assert(actual == expected, vim.inspect({ actual = actual, expected = expected }))
 	end
 end
 
+-- Known semantic forms resolve without a fallback status.
 check("variable", nil, nil)
 check("variable", {}, nil)
 check(nil, "readonly", nil)
-check("variable", { "readonly", "static" }, nil)
-check("MissingType", nil, "type: MissingType")
-check(nil, "MissingType", "typemod: MissingType")
-check("MissingType", {}, "type: MissingType", "lua")
-check(nil, "MissingMod", "typemod: MissingMod")
-check("variable", "MissingMod", "typemod: MissingMod")
-check("MissingType", "MissingMod", "type: MissingType")
-check("MissingType", { "MissingMod", "AnotherMod" }, "type: MissingType")
-check(nil, { "readonly", "MissingMod", "static" }, "typemod: MissingMod")
-check("variable", { "readonly", "MissingMod", "static" }, "typemod: MissingMod")
-local two = { "typemod: MissingMod", "typemod: AnotherMod" }
-check(nil, { "MissingMod", "readonly", "AnotherMod" }, two)
-check("variable", { "MissingMod", "readonly", "AnotherMod" }, two, "lua")
-check(nil, { "MissingMod", "MissingMod" }, "typemod: MissingMod")
-check("variable", { "MissingMod", "AnotherMod", "MissingMod", "ThirdMod", "AnotherMod" }, {
-	"typemod: MissingMod", "typemod: AnotherMod", "typemod: ThirdMod",
-})
+check(nil, "static", nil)
+check("variable", "readonly", nil)
 
--- Explicit combinations report their owner even if the free modifier exists.
+-- Unknown semantic names use the literal fallback. The resolver intentionally
+-- reports one compact status; source-aware diagnostics are owned by hl.setup.
+check("MissingType", nil, "unresolved_literal")
+check(nil, "MissingMod", "unresolved_literal")
+check("variable", "MissingMod", "unresolved_literal")
+check("MissingType", "MissingMod", "unresolved_literal")
+check("variable", { "readonly", "MissingMod", "static" }, "unresolved_literal")
+check(nil, { "readonly", "MissingMod", "static" }, "unresolved_literal")
+check("MissingType", {}, "unresolved_literal", "lua")
+
+-- Explicit typemod styles own concrete TS/LSP combinations. A concrete target
+-- that has to be invented is still reported as a literal fallback.
 check("variable", "readonly", nil, nil, nil, nil, true)
-check("variable", "static", "typemod: variable.static", nil, nil, nil, true)
-check("MissingType", "MissingMod", "typemod: MissingType.MissingMod", nil, nil, nil, true)
-check("variable", "readonly", "typemod: variable.readonly", "lua", nil, nil, true)
+check("variable", "static", "unresolved_literal", nil, nil, nil, true)
+check("MissingType", "MissingMod", "unresolved_literal", nil, nil, nil, true)
+check("variable", "MissingMod", "unresolved_literal", nil, nil, nil, true)
+-- No TS/LSP target was requested here, so nothing unresolved is materialized.
 check("variable", "MissingMod", nil, nil, { vim = true }, nil, true)
 check("variable", "MissingMod", nil, nil, {}, { ts = true, lsp = true }, true)
 
-local function check_link(type_name, modifier, target_type, expected)
+local function check_link(type_name, typemod, target_type, expected)
 	for _ = 1, 2 do
-		local actual = resolver.link(type_name, modifier, target_type)
-		assert(vim.deep_equal(actual, expected), vim.inspect({ actual = actual, expected = expected }))
+		assert(resolver.link(type_name, typemod, target_type) == expected)
 	end
 end
 check_link("variable", nil, "variable", nil)
-check_link("variable", nil, "MissingTarget", "type: MissingTarget")
-check_link("MissingType", nil, "variable", "type: MissingType")
-check_link("MissingType", nil, "MissingTarget", { "type: MissingType", "type: MissingTarget" })
-check_link("MissingType", nil, "MissingType", "type: MissingType")
-check_link(nil, "MissingMod", "MissingTarget", { "typemod: MissingMod", "type: MissingTarget" })
-check_link("variable", "MissingMod", "MissingTarget", { "typemod: MissingMod", "type: MissingTarget" })
+check_link("variable", nil, "MissingTarget", "unresolved_literal")
+check_link("MissingType", nil, "variable", "unresolved_literal")
+check_link("MissingType", nil, "MissingTarget", "unresolved_literal")
+check_link(nil, "MissingMod", "MissingTarget", "unresolved_literal")
+check_link("variable", "MissingMod", "MissingTarget", "unresolved_literal")
+
 assert(resolver.clear("variable", nil) == nil)
-assert(resolver.clear("MissingType", nil) == "type: MissingType")
-assert(resolver.clear(nil, "MissingMod") == "typemod: MissingMod")
-assert(resolver.clear("variable", "MissingMod") == "typemod: MissingMod")
-assert(resolver.clear("MissingType", "MissingMod") == "type: MissingType")
+assert(resolver.clear("MissingType", nil) == "unresolved_literal")
+assert(resolver.clear(nil, "MissingMod") == "unresolved_literal")
+assert(resolver.clear("variable", "MissingMod") == "unresolved_literal")
+assert(resolver.clear("MissingType", "MissingMod") == "unresolved_literal")
 
--- Only a selected missing target causes an explicit-combination hint.
-catalog["@variable.static"] = "@variable.static"
-resolver.clear_cache()
-check("variable", "static", nil, nil, { ts = true }, nil, true)
-check("variable", "static", "typemod: variable.static", nil, { lsp = true }, nil, true)
-catalog["@lsp.typemod.variable.static"] = "@lsp.typemod.variable.static"
-resolver.clear_cache()
-check("variable", "static", nil, nil, nil, nil, true)
-
--- Lists belong to the caller: mutating a returned list cannot poison caches.
-local mods = { "MissingMod", "AnotherMod" }
-local first = resolver.resolve("variable", mods, style)
-first[1] = "changed by caller"
-local second = resolver.resolve("variable", mods, style)
-assert(first ~= second and vim.deep_equal(second, two))
-
--- Hint aggregation must preserve every setter call, its order and style identity.
+-- The resolver must preserve the source hierarchy. LSP links to Tree-sitter,
+-- Tree-sitter links to Vim/syntax; it must never flatten the chain itself.
 calls = {}
-resolver.resolve("variable", mods, style)
+resolver.clear_cache()
+setup(true)
+resolver.resolve("variable", nil, style)
+assert(#calls == 3, "variable resolve did not materialize the three semantic layers")
+assert(calls[1][1] == "Identifier" and calls[1][2] == style and calls[1][3] == false)
+assert(calls[2][1] == "@variable" and calls[2][2] == "Identifier" and calls[2][3] == true)
+assert(calls[3][1] == "@lsp.type.variable" and calls[3][2] == "@variable" and calls[3][3] == true)
+
+calls = {}
+resolver.resolve("variable", nil, style, "lua")
+assert(#calls == 3, "filetype resolve did not materialize the three semantic layers")
+assert(calls[1][1] == "luaIdentifier" and calls[1][2] == style and calls[1][3] == false)
+assert(calls[2][1] == "@variable.lua" and calls[2][2] == "luaIdentifier" and calls[2][3] == true)
+assert(calls[3][1] == "@lsp.type.variable.lua" and calls[3][2] == "@variable.lua" and calls[3][3] == true)
+
+-- Multiple unknown mods still execute every requested literal action even though
+-- the public warning result is intentionally collapsed to one status string.
+calls = {}
+resolver.resolve("variable", { "MissingMod", "AnotherMod" }, style)
 assert(#calls == 2)
 assert(calls[1][1] == "MissingMod" and calls[2][1] == "AnotherMod")
 assert(calls[1][2] == style and calls[2][2] == style)
 assert(calls[1][3] == false and calls[2][3] == false)
+
+-- Target/clear masks remain independent.
 calls = {}
 resolver.resolve("MissingType", nil, style, "lua", { ts = true }, { vim = true, lsp = true })
 assert(#calls == 3)
@@ -107,32 +119,43 @@ assert(calls[1][1] == "luaMissingType" and calls[1][2] == nil and calls[1][3] ==
 assert(calls[2][1] == "@lsp.type.MissingType.lua" and calls[2][2] == nil and calls[2][3] == false)
 assert(calls[3][1] == "@MissingType.lua" and calls[3][2] == style and calls[3][3] == false)
 
--- Invalidation must discard old literal hints when the environment changes.
+-- Existing concrete combinations make otherwise unknown typemods resolvable.
+catalog["@variable.custom"] = "@variable.custom"
+resolver.clear_cache()
+check("variable", "custom", nil, nil, { ts = true }, nil, true)
+check("variable", "custom", "unresolved_literal", nil, nil, nil, true)
+-- The language-specific concrete target does not exist yet, so materializing it
+-- is correctly reported as a literal fallback.
+check("variable", "custom", "unresolved_literal", "lua", { ts = true }, nil, true)
+
+-- Cache invalidation must observe the new environment.
 catalog["missingtype"] = "MissingType"
 catalog["missingmod"] = "MissingMod"
 resolver.clear_cache()
 check("MissingType", nil, nil)
 check(nil, "MissingMod", nil)
 catalog["missingtype"], catalog["missingmod"] = nil, nil
-setup(false)
-check("MissingType", nil, "type: MissingType")
-check(nil, "MissingMod", "typemod: MissingMod")
+resolver.clear_cache()
+check("MissingType", nil, "unresolved_literal")
+check(nil, "MissingMod", "unresolved_literal")
 
--- Disable JIT allocation elision and GC: a temporary table would accumulate
--- even if discarded before return. Inputs and resolver caches are prebuilt.
+-- Warm resolver calls are deliberately allocation-free for the common nil/string
+-- result contract. Disable the recording setter first, then disable JIT allocation
+-- elision so accidental temporary tables are visible.
+setup(false)
+resolver.clear_cache()
 jit.off()
 jit.flush()
+local known_list = { "readonly", "static" }
+local missing_list = { "MissingMod", "AnotherMod" }
 local probes = {
 	function() return resolver.resolve("variable", nil, style) end,
 	function() return resolver.resolve("MissingType", nil, style) end,
 	function() return resolver.resolve(nil, "MissingMod", style) end,
 	function() return resolver.resolve("variable", "MissingMod", style, nil, nil, nil, true) end,
+	function() return resolver.resolve("variable", known_list, style) end,
+	function() return resolver.resolve("variable", missing_list, style) end,
 }
-for _, owner in ipairs({ false, "variable", "MissingType" }) do
-	for _, list in ipairs({ { "readonly", "static" }, { "MissingMod" }, { "readonly", "MissingMod" }, { "MissingMod", "MissingMod" } }) do
-		probes[#probes + 1] = function() return resolver.resolve(owner or nil, list, style) end
-	end
-end
 local function allocated_by(probe)
 	probe()
 	collectgarbage("collect")
@@ -145,10 +168,8 @@ local function allocated_by(probe)
 end
 for i, probe in ipairs(probes) do
 	local allocated = allocated_by(probe)
-	assert(allocated < 1, ("probe %d allocated %.3f KiB on warm zero/single-hint calls"):format(i, allocated))
+	assert(allocated < 1, ("probe %d allocated %.3f KiB on warm calls"):format(i, allocated))
 end
-local expected = allocated_by(function() return { two[1], two[2] } end)
-local actual = allocated_by(function() return resolver.resolve("variable", mods, style) end)
-assert(math.abs(actual - expected) < 1, "multiple hints must allocate exactly one result table per call")
 jit.on()
-print("cf.nvim resolver hints and allocation tests: OK")
+
+print("cf.nvim resolver contract, chain and allocation tests: OK")

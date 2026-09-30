@@ -68,7 +68,7 @@ return l.setup("lua", {
 	}),
 	l:group("type", {
 		fg = c.type,
-		types = { "class", "struct", "enum", "interface" },
+		types = {  "struct", "enum", "interface", "class" },
 		typemods = {
 			builtin = { pipeline = { hl.mix.fg(25, c.builtin) } },
 			declaration = { bold = true },

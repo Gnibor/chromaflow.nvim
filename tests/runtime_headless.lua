@@ -104,6 +104,28 @@ assert(style("RuntimeThing").bg == rgb(bg))
 assert(runtime_state._overlay_size() == 0, "runtime diff was not empty before the first modification")
 local cached_base = hl_runtime.group_style("RuntimeThing")
 
+-- Raw runtime targets are exact Neovim highlight names. They do not need a
+-- raw:group() declaration in the theme: an already-existing highlight can be
+-- adopted directly and its current effective style becomes the runtime base.
+local raw_external = hl.raw.RuntimeExternalRaw
+local raw_base = color.from_hex("#90b0d0")
+local raw_bg = color.from_hex("#182028")
+vim.api.nvim_set_hl(0, "RuntimeExternalRaw", { fg = rgb(raw_base), bg = rgb(raw_bg), italic = true })
+assert(hl_runtime.group_style("RuntimeExternalRaw") == nil, "external raw group unexpectedly entered the theme cache")
+r.apply(raw_external, r.groups.dim)
+local raw_dimmed = style("RuntimeExternalRaw")
+assert(raw_dimmed.fg == rgb(color.brightness(raw_base, -20)), "raw runtime target did not read the existing Neovim style")
+assert(raw_dimmed.bg == rgb(raw_bg) and raw_dimmed.italic == true, "raw runtime apply lost fields from the external base")
+assert(r.reset(raw_external) == true, "raw runtime reset did not remove the external override")
+local raw_restored = style("RuntimeExternalRaw")
+assert(raw_restored.fg == rgb(raw_base) and raw_restored.bg == rgb(raw_bg) and raw_restored.italic == true, "raw runtime reset did not restore the external Neovim base")
+
+local missing_raw = hl.raw.RuntimeMissingRaw
+local missing_raw_ok, missing_raw_err = pcall(r.apply, missing_raw, r.groups.dim)
+assert(not missing_raw_ok, "runtime raw apply unexpectedly accepted a missing Neovim highlight")
+assert(tostring(missing_raw_err):find("target is not materialized by the current theme", 1, true), "runtime raw apply returned the wrong missing-target error")
+assert(r.reset(missing_raw) == false, "failed raw runtime apply leaked override state")
+
 r.apply(ui_target, r.groups.dim)
 assert(runtime_state._overlay_size() == 1, "runtime diff did not contain exactly the modified UI target")
 assert(hl_runtime.group_style("RuntimeThing") == cached_base, "runtime apply polluted the normal base style cache")
@@ -206,6 +228,24 @@ compiled = theme.load(root)
 assert(style("RuntimeThing").fg == rgb(color.brightness(callback_base, -30)), "ColorScheme runtime call did not use final callback base")
 r.reset(ui_target)
 assert(style("RuntimeThing").fg == rgb(callback_base), "reset did not restore final ColorScheme callback base")
+
+-- External raw targets are rebound after reload against the final Neovim state
+-- produced by ColorScheme callbacks, even though no raw:group() exists in CF.
+local raw_reload_base = color.from_hex("#b09070")
+vim.api.nvim_set_hl(0, "RuntimeExternalRaw", { fg = rgb(raw_base), bg = rgb(raw_bg), italic = true })
+r.apply(raw_external, r.groups.dim)
+vim.api.nvim_create_autocmd("ColorScheme", {
+	pattern = "active",
+	once = true,
+	callback = function()
+		vim.api.nvim_set_hl(0, "RuntimeExternalRaw", { fg = rgb(raw_reload_base), bg = rgb(raw_bg), italic = true })
+	end,
+})
+compiled = theme.load(root)
+assert(style("RuntimeExternalRaw").fg == rgb(color.brightness(raw_reload_base, -30)), "raw runtime reload did not use the final external ColorScheme base")
+r.reset(raw_external)
+local raw_reload_restored = style("RuntimeExternalRaw")
+assert(raw_reload_restored.fg == rgb(raw_reload_base) and raw_reload_restored.bg == rgb(raw_bg) and raw_reload_restored.italic == true, "raw runtime reset after reload did not restore the external callback base")
 
 -- If an active runtime override references an action removed by a new runtime
 -- module, compilation fails before the destructive ColorScheme apply begins.

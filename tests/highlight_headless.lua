@@ -5,6 +5,7 @@ local hl = require("cf.hl.setup")
 local runtime = require("cf.hl.runtime")
 local resolver = require("cf.hl.resolver")
 local color = require("cf.color")
+local config = require("cf.config")
 
 local function link_target(name)
 	local hl_value = vim.api.nvim_get_hl(0, { name = name, link = true, create = false })
@@ -48,6 +49,33 @@ local colors = {
 hl._begin(colors, {
 	style_targets = { vim = true, ts = true, lsp = true },
 })
+
+-- The normal render boundary must pass RGB integers straight to Neovim.
+-- ChromaFlow stores colours internally as 0xAARRGGBB, so only the alpha byte
+-- is stripped here; converting to #RRGGBB would make nvim_set_hl() parse it
+-- straight back into the same integer.
+local original_set_hl = vim.api.nvim_set_hl
+local rendered_rgb
+vim.api.nvim_set_hl = function(ns, name, value)
+	if name == "CFRenderIntegerTest" then
+		rendered_rgb = value
+	end
+	return original_set_hl(ns, name, value)
+end
+local previous_alpha = config.alpha
+config.alpha = false
+runtime.setter("CFRenderIntegerTest", {
+	fg = 0xFF123456,
+	bg = 0x80445566,
+	sp = 0xFF778899,
+}, false)
+config.alpha = previous_alpha
+vim.api.nvim_set_hl = original_set_hl
+assert(rendered_rgb, "RGB render was not observed")
+assert(type(rendered_rgb.fg) == "number" and rendered_rgb.fg == 0x123456, "fg was not rendered as RGB integer")
+assert(type(rendered_rgb.bg) == "number" and rendered_rgb.bg == 0x445566, "bg was not rendered as RGB integer")
+assert(type(rendered_rgb.sp) == "number" and rendered_rgb.sp == 0x778899, "sp was not rendered as RGB integer")
+runtime.setter("CFRenderIntegerTest", nil, false)
 
 local l = hl.language
 local raw = hl.raw

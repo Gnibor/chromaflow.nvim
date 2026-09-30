@@ -44,19 +44,33 @@ local function blend_label(value)
 	return "blend: " .. (value == nil and "unset" or tostring(value)) .. "  (+/-; Alt: 10)"
 end
 
--- Tree-sitter has a few standard hierarchical captures whose complete prefix
--- names a CF Type rather than a Type + Mod pair. Keep this reverse-only
--- knowledge in the picker; the normal resolver hotpath stays untouched.
-local TS_TYPE_ALIASES = {
-	["variable.parameter"] = "parameter",
-	["module"] = "namespace",
-	["string.regexp"] = "regexp",
-	["number.float"] = "float",
-	["function.method"] = "method",
-	["keyword.function"] = "function",
-	["keyword.operator"] = "operator",
-	["keyword.type"] = "type",
-	["keyword.modifier"] = "modifier",
+-- Tree-sitter capture names are hierarchical. Most can be reversed from their
+-- dot structure, but a few standard captures do not mean what that structure
+-- would suggest to the CF DSL. Keep only those reverse-only exceptions here;
+-- the resolver hotpath does not need them.
+local TS_REVERSE = {
+	types = {
+		["variable.parameter"] = "parameter",
+		["module"] = "namespace",
+		["string.regexp"] = "regexp",
+		["number.float"] = "float",
+		["function.method"] = "method",
+		["keyword.function"] = "function",
+		["keyword.operator"] = "operator",
+		["keyword.type"] = "type",
+		["keyword.modifier"] = "modifier",
+	},
+	mods = {
+		-- Hierarchy components used only inside concrete captures. They must not
+		-- become synthetic standalone Mod rows just because a dotted capture was
+		-- inspected at the cursor.
+		call = { standalone = false },
+		member = { standalone = false },
+	},
+	typemods = {
+		-- Full-capture overrides belong here if a future TS capture cannot be
+		-- represented by the normal <type-prefix>.<typemod-suffix> heuristic.
+	},
 }
 
 local function append(items, seen, kind, name, type_name, typemod, origin)
@@ -191,7 +205,13 @@ local function reverse_mod(source, token)
 end
 
 local function reverse_ts_type(token)
-	return TS_TYPE_ALIASES[token] or reverse_type("ts", token)
+	return TS_REVERSE.types[token] or reverse_type("ts", token)
+end
+
+local function reverse_ts_mod(token)
+	local rule = TS_REVERSE.mods[token]
+	if rule and rule.name then return rule.name end
+	return reverse_mod("ts", token) or token
 end
 
 local function lower_token(token)
@@ -204,7 +224,7 @@ local function append_lsp(items, seen)
 		return false
 	end
 
-	for i = 1, #tokens do
+	for i = #tokens, 1, -1 do
 		local token = tokens[i]
 		-- LSP already supplies the semantic axes separately. In particular,
 		-- token.type == "modifier" is just a Type named "modifier"; only the
@@ -248,80 +268,73 @@ local function join_parts(parts, first, last)
 	return value
 end
 
--- Tree-sitter only gives hierarchical capture names. Find the strongest
--- semantic Type represented anywhere in that hierarchy using the same forward
--- names the resolver already materializes. Longest match wins; for equal-sized
--- matches the right-most one wins, so e.g. keyword.function becomes Type
--- "function", while function.method resolves to the explicit Type "method".
-local function ts_type_match(token)
-	local parts = split_dots(token)
-	local best_type
-	local best_last
-	local best_len = 0
-	local best_first = 0
+-- Resolve one *actual* Tree-sitter capture into one editable CF target.
+-- Dot splitting is the default heuristic; exception tables only override cases
+-- where TS hierarchy and CF semantics differ. Importantly, decomposition is
+-- internal only: @function.call does not invent active @function/@call rows.
+local function classify_ts_capture(token)
+	if type(token) ~= "string" or token == "" then return nil end
+	token = token:gsub("^@", "")
 
-	for first = 1, #parts do
-		local candidate = parts[first]
-		for last = first, #parts do
-			if last > first then
-				candidate = candidate .. "." .. parts[last]
-			end
-			local semantic = reverse_ts_type(candidate)
-			if semantic then
-				local len = last - first + 1
-				if len > best_len or (len == best_len and first > best_first) then
-					best_type = semantic
-					best_last = last
-					best_len = len
-					best_first = first
-				end
-			end
+	local type_name = reverse_ts_type(token)
+	if type_name then
+		return { kind = "Type", name = type_name, type_name = type_name }
+	end
+
+	local explicit = TS_REVERSE.typemods[token]
+	if explicit then
+		local tm_type = explicit.type_name
+		local typemod = explicit.typemod
+		local name = explicit.name or (tm_type and typemod and (tm_type .. "." .. typemod))
+		if name and tm_type and typemod then
+			return { kind = "TypeMod", name = name, type_name = tm_type, typemod = typemod }
 		end
 	end
 
-	if best_type then
-		return best_type, join_parts(parts, best_last + 1, #parts)
+	local parts = split_dots(token)
+	if #parts == 1 then
+		local rule = TS_REVERSE.mods[token]
+		local mod = reverse_mod("ts", token)
+		if mod and (not rule or rule.standalone ~= false) then
+			return { kind = "Mod", name = mod, typemod = mod }
+		end
+		return { kind = "Type", name = token, type_name = token }
 	end
 
-	return nil, nil
+	-- Prefer the longest known Type prefix. If none is exceptional/materialized,
+	-- the first TS hierarchy component is the ordinary Type by convention.
+	local prefix_type
+	local prefix_last
+	for last = #parts - 1, 1, -1 do
+		local candidate = join_parts(parts, 1, last)
+		local semantic = reverse_ts_type(candidate)
+		if semantic then
+			prefix_type, prefix_last = semantic, last
+			break
+		end
+	end
+	if not prefix_type then
+		prefix_type = reverse_ts_type(parts[1]) or parts[1]
+		prefix_last = 1
+	end
+
+	local suffix = join_parts(parts, prefix_last + 1, #parts)
+	if not suffix then
+		return { kind = "Type", name = prefix_type, type_name = prefix_type }
+	end
+	local typemod = reverse_ts_mod(suffix)
+	return {
+		kind = "TypeMod",
+		name = prefix_type .. "." .. typemod,
+		type_name = prefix_type,
+		typemod = typemod,
+	}
 end
 
 local function append_ts_capture(items, seen, token)
-	if type(token) ~= "string" or token == "" then
-		return
-	end
-	token = token:gsub("^@", "")
-
-	local type_name, trailing = ts_type_match(token)
-	if type_name then
-		local parent = append(items, seen, "Type", type_name, nil, nil, "ts")
-		if trailing then
-			local mod = reverse_mod("ts", trailing) or trailing
-			local entry = append(items, seen, "Mod", mod, nil, nil, "ts")
-			if entry and not entry.parent then entry.parent = parent end
-			append(items, seen, "TypeMod", type_name .. "." .. mod, type_name, mod, "ts")
-		end
-		return
-	end
-
-	local mod = reverse_mod("ts", token)
-	if mod then
-		append(items, seen, "Mod", mod, nil, nil, "ts")
-		return
-	end
-
-	-- Unknown TS captures still have a useful structural fallback: the root is
-	-- the Type and the remaining hierarchy is its TypeMod spelling.
-	local root, rest = token:match("^([^.]+)%.(.+)$")
-	if root then
-		local parent = append(items, seen, "Type", root, nil, nil, "ts")
-		local fallback_mod = reverse_mod("ts", rest) or rest
-		local entry = append(items, seen, "Mod", fallback_mod, nil, nil, "ts")
-		if entry and not entry.parent then entry.parent = parent end
-		append(items, seen, "TypeMod", root .. "." .. fallback_mod, root, fallback_mod, "ts")
-	else
-		append(items, seen, "Type", token, nil, nil, "ts")
-	end
+	local entry = classify_ts_capture(token)
+	if not entry then return end
+	append(items, seen, entry.kind, entry.name, entry.type_name, entry.typemod, "ts")
 end
 
 local function append_ts(items, seen, inspected)
@@ -329,7 +342,7 @@ local function append_ts(items, seen, inspected)
 		return false
 	end
 
-	for i = 1, #inspected.treesitter do
+	for i = #inspected.treesitter, 1, -1 do
 		append_ts_capture(items, seen, inspected.treesitter[i].capture)
 	end
 
@@ -337,7 +350,7 @@ local function append_ts(items, seen, inspected)
 end
 
 local function append_vim(items, seen, inspected)
-	for i = 1, #inspected.syntax do
+	for i = #inspected.syntax, 1, -1 do
 		local name = inspected.syntax[i].hl_group
 		append(items, seen, "Type", reverse_type("vim", name) or name, nil, nil, "vim")
 	end
@@ -354,12 +367,14 @@ local function items_at_cursor()
 	local items = {}
 	local seen = {}
 
-	-- One semantic source is enough. CF already fans a semantic declaration out
-	-- to Vim/Tree-sitter/LSP, so prefer the most explicit source available.
-	if append_lsp(items, seen) then
-		return items
-	end
+	-- LSP and Tree-sitter can describe different semantic axes at the same
+	-- cursor position. Collect both; only fall back to Vim syntax when neither
+	-- semantic source contributed anything.
+	local semantic = append_lsp(items, seen)
 	if append_ts(items, seen, inspected) then
+		semantic = true
+	end
+	if semantic then
 		return items
 	end
 	append_vim(items, seen, inspected)
@@ -489,8 +504,23 @@ local function inherited_type_owner(entry)
 	end
 end
 
-local function detach_metadata(entry, base)
+local function detached_type_owner(entry)
+	if entry._cf_create_type_anchor then
+		local module, declaration = owner_module(entry)
+		if declaration and declaration.action == "group" and declaration.kind ~= "raw"
+			and declaration.name == entry._cf_create_type_anchor
+		then
+			return module, declaration, false, entry._cf_create_type_inherited == true
+		end
+		return nil
+	end
+
 	local module, declaration = inherited_type_owner(entry)
+	if module then return module, declaration, true, true end
+end
+
+local function detach_metadata(entry, base)
+	local module, declaration, remove_from_types, copy_parent_metadata = detached_type_owner(entry)
 	if not module then return nil end
 	local inherited = base
 	for _, action in ipairs(module.actions or {}) do
@@ -507,6 +537,99 @@ local function detach_metadata(entry, base)
 		parent = declaration.name,
 		child = entry.type_name,
 		base = copy_style(inherited),
+		remove_from_types = remove_from_types,
+		copy_parent_metadata = copy_parent_metadata,
+	}
+end
+
+local function local_language_modules(filetype)
+	local out = {}
+	local current = theme.current()
+	for _, module in ipairs(current and current.modules or {}) do
+		if module.kind == "language" and module.name == filetype then
+			out[#out + 1] = module
+		end
+	end
+	return out
+end
+
+local function first_group_declaration(module)
+	for _, declaration in ipairs(module and module.declarations or {}) do
+		if declaration.action == "group" and declaration.kind ~= "raw" then return declaration end
+	end
+end
+
+local function local_parent(entry, type_name)
+	if not type_name then return nil end
+	local parent = {
+		kind = "Type", name = type_name, type_name = type_name,
+		filetype = entry.filetype, bufnr = entry.bufnr,
+	}
+	if not resolve_entry(parent) then return nil end
+	local action = parent.action
+	local filetype = entry.filetype or vim.bo.filetype
+	if not action or action._cf_owner_kind ~= "language" or action._cf_owner_name ~= filetype then return nil end
+	local module, declaration = owner_module(parent)
+	if not module then return nil end
+	return parent, module, declaration
+end
+
+-- Pick the concrete language source that can own a new local semantic entry.
+-- Existing semantic parents are authoritative (important when several modules
+-- contribute to one filetype); otherwise only a unique language module is safe.
+local function local_creation(entry)
+	local filetype = entry.filetype or vim.bo.filetype
+	if filetype == "" then return nil end
+
+	local parent, module, declaration
+	if entry.kind == "Mod" and entry.parent then
+		parent, module, declaration = local_parent(entry, entry.parent.type_name)
+	elseif entry.kind == "TypeMod" and entry.type_name then
+		parent, module, declaration = local_parent(entry, entry.type_name)
+	elseif entry.kind == "Type" and entry.action and entry.action.kind == "resolver_link"
+		and entry.action._cf_owner_kind == "language" and entry.action._cf_owner_name == nil
+	then
+		parent, module, declaration = local_parent(entry, entry.action.target_type)
+	end
+
+	if not module then
+		local modules = local_language_modules(filetype)
+		if #modules ~= 1 then return nil end
+		module = modules[1]
+		declaration = first_group_declaration(module)
+	end
+
+	local type_name = entry.kind == "Mod" and nil or entry.type_name
+	local candidates = resolver.runtime_style_names(type_name, entry.typemod, filetype, TARGETS_ALL, nil, type_name ~= nil)
+	local names = {}
+	for i = 1, #candidates do
+		if vim.fn.hlexists(candidates[i]) == 1 then names[#names + 1] = candidates[i] end
+	end
+	if #names == 0 then return nil end
+
+	local source
+	local create_type_anchor
+	local create_type_inherited = false
+	if entry.kind == "Mod" then
+		source = module.source
+	elseif entry.kind == "TypeMod" then
+		source = declaration and declaration.source
+	else
+		if not declaration then return nil end
+		source = declaration.source
+		create_type_anchor = declaration.name
+		create_type_inherited = parent ~= nil and entry.action ~= nil
+			and entry.action.kind == "resolver_link" and entry.action.target_type == declaration.name
+	end
+	if not source then return nil end
+
+	return {
+		module = module,
+		source = source,
+		names = names,
+		type_name = type_name,
+		create_type_anchor = create_type_anchor,
+		create_type_inherited = create_type_inherited,
 	}
 end
 
@@ -707,9 +830,31 @@ end
 local open_pick
 local open_edit
 
+local function bind_local_target(entry, creation)
+	local runtime = require("cf.fn.runtime")
+	local target = runtime.target(creation.module.kind, creation.module.name, creation.type_name, entry.typemod)
+	runtime._picker_bind_target(target, creation.names, require("cf.hl.runtime").read_effective_style(creation.names[1]))
+	entry.target, entry.source, entry.unresolved = target, creation.source, nil
+	entry._cf_create_type_anchor = creation.create_type_anchor
+	entry._cf_create_type_inherited = creation.create_type_inherited
+	entry.action = {
+		kind = "resolver_style", type_name = creation.type_name, typemod = entry.typemod,
+		typemod_style = creation.type_name ~= nil and entry.typemod ~= nil,
+		_cf_owner_kind = creation.module.kind, _cf_owner_name = creation.module.name, _cf_source = creation.source,
+	}
+	return target
+end
+
 local function prepare_target(entry)
+	if entry._cf_local_creation then
+		return bind_local_target(entry, entry._cf_local_creation)
+	end
+
 	local target = resolve_entry(entry)
 	if target then return target end
+
+	local creation = local_creation(entry)
+	if creation then return bind_local_target(entry, creation) end
 
 	local parent
 	local type_name
@@ -747,6 +892,41 @@ local function prepare_target(entry)
 		_cf_owner_kind = module.kind, _cf_owner_name = module.name, _cf_source = source,
 	}
 	return target
+end
+
+local function generic_language_fallback(entry)
+	local action = entry.action
+	return action and action._cf_owner_kind == "language" and action._cf_owner_name == nil
+end
+
+local function source_choice(entry)
+	if entry._cf_source_choice then return nil end
+	if not resolve_entry(entry) or not generic_language_fallback(entry) then return nil end
+	return local_creation(entry)
+end
+
+local function clone_entry(entry)
+	local copy = {}
+	for key, value in pairs(entry) do copy[key] = value end
+	return copy
+end
+
+local function open_source_choice(entry, entries, selected, creation)
+	local filetype = entry.filetype or vim.bo.filetype
+	return menu.open({
+		title = " Source: " .. entry.name .. " ",
+		items = { filetype, "generic" },
+		on_back = function()
+			if entry.back then entry.back() else open_pick(entries, selected) end
+		end,
+		on_select = function(_, index)
+			local chosen = clone_entry(entry)
+			chosen._cf_source_choice = index == 1 and "local" or "generic"
+			chosen._cf_local_creation = index == 1 and creation or nil
+			chosen._cf_choice_back = function() open_source_choice(entry, entries, selected, creation) end
+			open_edit(chosen, entries, selected)
+		end,
+	})
 end
 
 local function open_style(entry, entries, selected)
@@ -848,7 +1028,7 @@ local function open_pipeline(entry, entries, selected)
 	local spec = declaration and declaration.spec or {}
 	local inherited
 	local detach_type
-	local inherited_module, inherited_declaration = inherited_type_owner(entry)
+	local inherited_module, inherited_declaration = detached_type_owner(entry)
 	if inherited_module then
 		local state = require("cf.fn.runtime")._picker_style_state(target, false)
 		detach_type = detach_metadata(entry, state.base)
@@ -904,7 +1084,7 @@ local function open_typemods(entry, entries, selected, row_selected)
 		api.nvim_echo({ { "ChromaFlow: no TypeMods available for this Type in the current session", "WarningMsg" } }, false, {})
 		return open_edit(entry, entries, selected)
 	end
-	-- A Type and its qualifiers can live in separate group declarations.
+	-- A Type and its TypeMods can live in separate group declarations.
 	-- Use the same resolved child source for labels, edits and persistence.
 	for _, row in ipairs(rows) do
 		local child = { kind = "TypeMod", name = entry.type_name .. "." .. row.name,
@@ -995,6 +1175,9 @@ local function open_typemods(entry, entries, selected, row_selected)
 end
 
 open_edit = function(entry, entries, selected)
+	local creation = source_choice(entry)
+	if creation then return open_source_choice(entry, entries, selected, creation) end
+
 	local items = { "Pipeline", "Style" }
 	if entry.kind == "Type" then
 		items[3] = "TypeMods"
@@ -1004,7 +1187,13 @@ open_edit = function(entry, entries, selected)
 		title = " Edit: " .. entry.name .. " ",
 		items = items,
 		on_back = function()
-			if entry.back then entry.back() else open_pick(entries, selected) end
+			if entry._cf_choice_back then
+				entry._cf_choice_back()
+			elseif entry.back then
+				entry.back()
+			else
+				open_pick(entries, selected)
+			end
 		end,
 		on_select = function(action)
 			if action == "Style" then

@@ -2,34 +2,44 @@ vim.opt.runtimepath:prepend(vim.fn.getcwd())
 
 local cf = require("cf")
 local color = require("cf.color")
-local runtime = require("cf.hl.runtime")
 local theme = require("cf.theme")
 
-local root = vim.fs.joinpath(vim.fn.getcwd(), "example", "themes")
+local root = vim.fs.joinpath(vim.fn.getcwd(), "examples", "themes")
 cf.setup({ theme_path = root, watch = false })
 
 local compiled = assert(theme.current())
 assert(compiled.default == "dark")
 assert(compiled.active == "dark")
+local c = compiled.colors
 
-local normal = assert(runtime.group_style("Normal"), "bundled theme did not style Normal")
-assert(normal.bg == color.from_hex("#0f121b"))
-assert(normal.fg == color.from_hex("#cfcfcf"))
+local function effective(name)
+	return vim.api.nvim_get_hl(0, { name = name, link = false, create = false })
+end
 
-local fn = assert(runtime.group_style("Function"), "generic syntax module did not style Function")
-assert(fn.fg == color.from_hex("#feac33"))
+local function direct(name)
+	return vim.api.nvim_get_hl(0, { name = name, link = true, create = false })
+end
 
--- The Lua module is allowed to reuse the generic interned style. In that case
--- the resolver deliberately links the language-specific chain instead of
--- duplicating an identical direct style.
-local lua_fn = vim.api.nvim_get_hl(0, { name = "luaFunction", link = true })
-assert(lua_fn.link == "Function", "Lua Vim syntax form was not materialized")
-local lua_ts = vim.api.nvim_get_hl(0, { name = "@function.lua", link = true })
-assert(lua_ts.link == "luaFunction", "Lua Tree-sitter form was not materialized")
-local lua_lsp = vim.api.nvim_get_hl(0, { name = "@lsp.type.function.lua", link = true })
-assert(lua_lsp.link == "@function.lua", "Lua LSP form was not materialized")
+local function rgb(value)
+	if type(value) == "string" then return tonumber(value:sub(2), 16) end
+	return tonumber(color.to_rgb_hex(value):sub(2), 16)
+end
 
-local raw_keyword = assert(runtime.group_style("@keyword.function.lua"), "Lua raw capture missing")
-assert(raw_keyword.bold == true)
+local normal = effective("Normal")
+assert(normal.bg == rgb("#0f121b"))
+assert(normal.fg == rgb("#cfcfcf"))
+
+local generic_function = color.darken(c.func, 3)
+assert(effective("Function").fg == rgb(generic_function), "generic Function style drifted")
+
+-- Lua intentionally overrides the generic function pipeline. The resolver still
+-- keeps the semantic source chain LSP -> Tree-sitter -> Vim syntax intact.
+local lua_function = color.brightness(color.shiftHue(c.func, -5), 20)
+assert(effective("luaFunction").fg == rgb(lua_function), "Lua function pipeline was not applied")
+assert(direct("@function.lua").link == "luaFunction", "Lua Tree-sitter form did not link to Vim syntax")
+assert(direct("@lsp.type.function.lua").link == "@function.lua", "Lua LSP form did not link to Tree-sitter")
+
+local keyword_function = effective("@keyword.function.lua")
+assert(keyword_function.bold == true, "Lua keyword.function capture lost its bold style")
 
 print("cf.nvim bundled dark theme tests: OK")

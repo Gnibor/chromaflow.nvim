@@ -1,131 +1,146 @@
-# ChromaFlow.nvim
+# ChromaFlow / cf.nvim
 
-ChromaFlow is a semantic theme engine for Neovim. Themes are written as normal
-Lua in `*.cf` files and compiled into Vim, Tree-sitter and LSP highlight groups.
-One semantic declaration can cover several highlight systems, filetype variants,
-TypeMods, plugin/UI groups and runtime effects without hard-coding every concrete
-Neovim group name.
+[Why ChromaFlow](#why-chromaflow) · [How it fits together](#how-the-pieces-fit) · [Install](#installation-and-setup) · [Minimal theme](#minimal-theme) · [CFPick](#theme-design-with-cfpick) · [Commands](#useful-commands) · [Performance](#performance-tests-and-benchmarks) · [Documentation](#documentation)
 
+ChromaFlow is a fast, programmable theme engine for Neovim. Themes are split into
+small Lua-based `.cf` modules, compiled into reusable styles and resolved across
+Vim syntax, Tree-sitter and LSP semantic highlights.
 
-## Highlights
+## Why ChromaFlow
 
-- semantic `language`, `plugin` and `ui` DSLs plus an exact `raw` escape hatch;
-- one style can target Vim, Tree-sitter and LSP independently;
-- Type aliases, TypeMods, Mod-only rules, links, clears and stable compile priority;
-- colour pipelines for `fg`, `bg`, `sp`, `ctermfg` and `ctermbg`;
-- theme inheritance by semantic module identity instead of filename;
-- watched live reloads with the same transactional compile/apply path as `:CFReload`;
-- sparse runtime overrides with `apply`, `replace`, `reset` and `clear`;
-- optional `:CFPick` editor with live preview and `:CFSave` source persistence;
-- optional diagnostics/debug tracing, LineBlend and LuaSnip helpers.
+I built ChromaFlow because large static-table themes annoyed me. For the way I
+build themes, they were slower than I wanted and became maintenance hell once they
+grew: repeated strings and highlight tables get pushed around again and again, the
+same conceptual style is copied across many names, relationships disappear into a
+giant list, and changing one idea often means hunting through several unrelated
+entries.
 
-`*.cf` is registered as `filetype=lua`, so normal Lua syntax highlighting,
-Tree-sitter and LuaLS can be used while authoring a theme.
+I wanted the opposite: small modules that describe intent, shared/interned styles
+instead of repeated definitions, semantic resolution where it helps, exact raw
+names where it does not, and tools that let me edit the theme from the code I am
+actually looking at.
 
-## Installation
+That led to ChromaFlow's main pieces:
 
-### packer.nvim
+- small Lua-based `.cf` theme modules;
+- one resolver for Vim syntax, Tree-sitter and LSP semantic highlights;
+- style interning/deduplication instead of repeated highlight definitions;
+- cached hot paths and early exits;
+- `CFPick` for live theme editing at the cursor;
+- automatic theme watching/reload;
+- runtime styles, diagnostics, ColorTrace and LineBlend in the same system.
 
-```lua
-use "Gnibor/chromaflow.nvim"
+## How the pieces fit
+
+```text
+color.cf + config.cf + .cf modules
+                |
+                v
+        module setup / styles
+                |
+        resolver or raw names
+                |
+                v
+          compiled theme
+                |
+                v
+        Neovim highlights
+
+runtime modules  -> sparse live overrides
+CFPick / CFSave   -> inspect compiled ownership, preview, persist source edits
+ColorTrace        -> explain pipeline color transformations in source
+LineBlend         -> keep CursorLine visible across styles with backgrounds
 ```
 
-### lazy.nvim
+### Documentation map
 
-```lua
-{
-    "Gnibor/chromaflow.nvim",
-}
-```
+| If you want to... | Read |
+| --- | --- |
+| install ChromaFlow and build the first theme | [`getting-started.md`](README/getting-started.md) |
+| understand theme roots, `.cf-theme`, reserved files and fallback | [`theme-structure.md`](README/theme-structure.md) |
+| define palette colors and transform them | [`colors.md`](README/colors.md), then [`pipeline.md`](README/pipeline.md) |
+| style language semantics | [`language.md`](README/language.md) |
+| style plugin-owned groups/captures | [`plugin.md`](README/plugin.md) |
+| style editor UI groups | [`ui.md`](README/ui.md) |
+| target exact Neovim highlight names | [`raw.md`](README/raw.md) |
+| understand how Type/Mod/TypeMod names become concrete highlights | [`resolver.md`](README/resolver.md) |
+| apply temporary or dynamic styles after the theme is loaded | [`runtime.md`](README/runtime.md) |
+| inspect and edit the style under the cursor | [`picker.md`](README/picker.md) |
+| understand diagnostics and pipeline tracing | [`diagnostic.md`](README/diagnostic.md), [`colortrace.md`](README/colortrace.md) |
+| keep CursorLine coherent across styled backgrounds | [`lineblend.md`](README/lineblend.md) |
+| reuse ChromaFlow's standalone float renderer | [`float.md`](README/float.md) |
+| run regression tests or reproduce performance measurements | [`tests_benchmarks.md`](README/tests_benchmarks.md) |
 
-### Neovim `vim.pack`
+## Installation and setup
+
+With Neovim's built-in `vim.pack` (Neovim 0.12+):
 
 ```lua
 vim.pack.add({
-    "https://github.com/Gnibor/chromaflow.nvim",
+  "https://github.com/Gnibor/chromaflow.nvim",
 })
 ```
 
-### vim-plug
+With `packer.nvim`:
 
-```vim
-Plug 'Gnibor/chromaflow.nvim'
+```lua
+use("Gnibor/chromaflow.nvim")
 ```
 
-Then configure ChromaFlow normally:
+With `lazy.nvim` / LazyVim:
+
+```lua
+return { "Gnibor/chromaflow.nvim" }
+```
+
+Then configure ChromaFlow:
 
 ```lua
 require("cf").setup({
-    theme_path = vim.fn.stdpath("config") .. "/chromaflow",
-    watch = true,
-    picker = false,
+  theme_path = vim.fn.stdpath("config") .. "/themes",
+  picker = true,
 })
 ```
 
-See [Configuration](README/CONFIGURATION.md) for every option and command.
-
-## Theme layout
-
-A theme root contains `.cf-theme`, one or more theme folders, and optionally a
-shared `runtime/` directory:
-
-```text
-chromaflow/
-├── .cf-theme
-├── runtime/
-│   └── pulse.cf
-├── dark/
-│   ├── color.cf
-│   ├── config.cf
-│   ├── generic.cf
-│   ├── lang-lua.cf
-│   ├── core-ui.cf
-│   └── plugin-telescope.cf
-└── light/
-    └── ...
-```
-
-`.cf-theme` contains exactly two non-empty lines: the default/fallback theme and
-the active theme.
-
-```text
-dark
-dark
-```
-
-Only `color.cf` and `config.cf` are reserved filenames. Every other `*.cf` file
-is simply a module; its `setup()` call defines what it is. Active themes may be
-partial: missing reserved files and module identities fall back to the default
-theme. See [Themes and fallback](README/THEMES.md).
+`picker = true` enables `:CFPick` and `:CFSave`. Theme watching is enabled by
+default. LuaSnip is optional and is only integrated when it is already loaded.
 
 ## Minimal theme
 
-`color.cf` returns the shared palette:
+A theme root can be as small as:
+
+```text
+themes/
+├── .cf-theme
+└── mytheme/
+    ├── color.cf
+    └── lua.cf       # example name; module filenames are otherwise free
+```
+
+`.cf-theme` contains exactly two non-empty lines: default theme, then active theme.
+
+```text
+mytheme
+mytheme
+```
+
+`color.cf` provides the shared palette:
 
 ```lua
 return {
-    bg = "#0f121b",
-    fg = "#cfcfcf",
-    comment = "#7890ab",
-    func = "#d4aa78",
-    keyword = "#b4a2cd",
-    type = "#8ebfc9",
+  bg = "#111318",
+  fg = "#d6d6d6",
+  comment = "#73829a",
+  variable = "#b7ccb9",
+  ["function"] = "#d7ad7c",
+  type = "#8dbfc8",
+  keyword = "#b5a2ce",
 }
 ```
 
-`config.cf` defines the hard target boundary:
+A palette must exist somewhere in the active/root/default fallback chain.
 
-```lua
-return {
-    style_targets = {
-        vim = true,
-        ts = true,
-        lsp = true,
-    },
-}
-```
-
-A language module uses semantic names rather than concrete highlight names:
+A minimal language module (for example `lua.cf`; the filename itself is arbitrary):
 
 ```lua
 local hl = require("cf.hl.setup")
@@ -133,142 +148,127 @@ local c = hl.colors
 local l = hl.language
 
 return l.setup("lua", {
-    mods = {
-        deprecated = { strikethrough = true },
-    },
-
-    l:group("comment", {
-        fg = c.comment,
-        italic = true,
-    }),
-
-    l:group("function", {
-        fg = c.func,
-        types = { "method" },
-        pipeline = {
-            hl.darken.fg(3),
-        },
-        typemods = {
-            builtin = {
-                pipeline = { hl.mix.fg(22, c.keyword) },
-            },
-            declaration = { bold = true },
-        },
-    }),
-
-    l:group("type", {
-        fg = c.type,
-        types = { "class", "struct", "enum", "interface" },
-    }),
+  l:group("comment", { fg = c.comment, italic = true }),
+  l:group("variable", { fg = c.variable }),
+  l:group("function", { fg = c["function"], types = { "method" } }),
+  l:group("type", {
+    fg = c.type,
+    types = { "class", "struct", "enum", "interface" },
+  }),
+  l:group("keyword", { fg = c.keyword }),
 })
 ```
 
-ChromaFlow resolves the semantic requests to the usable Vim, Tree-sitter and
-LSP forms for that language. A `types` entry becomes an alias of the primary
-semantic Type. `typemods` describe `Type + TypeMod`; module-level `mods` describe
-a Mod without a concrete Type.
+## Theme design with `CFPick`
 
-Plugin modules use the same resolver without a filetype context and explicitly
-select the systems they own:
+The picker exists to remove the usual loop:
 
-```lua
-local hl = require("cf.hl.setup")
-local c = hl.colors
-local p = hl.plugin
-
-return p.setup("telescope", {
-    style_targets = { vim = true },
-
-    p:group("TelescopeNormal", { fg = c.fg, bg = c.bg }),
-    p:group("TelescopeTitle", { fg = c.keyword, bold = true }),
-})
+```text
+:Inspect → copy name → edit theme → reload → return to source → repeat
 ```
 
-UI modules default to Vim highlights. `hl.raw` bypasses semantic resolution and
-addresses exact Neovim highlight-group names. The full language is documented in
-[DSL reference](README/DSL.md).
+Place the cursor on real code and run `:CFPick`. It shows the concrete editable
+targets available at that position. LSP and Tree-sitter information can coexist;
+the picker avoids inventing targets that are not actually present.
 
-## Colour pipelines
+![CFPick showing the editable targets at the cursor](README/screenshots/ChromaFlow-Pick.png)
 
-Direct style fields are applied first, then pipeline operations run in order:
+*CFPick can expose several concrete Type, Mod, and TypeMod targets at the same
+cursor position.*
 
-```lua
-l:group("function", {
-    fg = c.func,
-    bg = c.bg,
-    pipeline = {
-        hl.shiftHue.fg(-5),
-        hl.brightness.fg(20),
-        hl.opacity.bg(8),
-    },
-})
-```
+Picker changes are previewed immediately through the runtime layer. When the
+result is right, use `:CFSave` to persist the confirmed edits and reload the theme.
 
-Available operations are `mix`, `opacity`, `brightness`, `lighten`, `darken`,
-`shiftHue` and `gamma`. Every operation supports `fg`, `bg`, `sp`, `cfg` and
-`cbg`; `cfg`/`cbg` manipulate `ctermfg`/`ctermbg` without changing RGB fields.
+If a language module exists but the current style comes from `generic`, CFPick
+can ask whether the edit should remain generic or become language-specific.
 
-## Runtime overrides
+[`examples/showcase/`](examples/showcase/) contains language playgrounds for
+designing themes directly against real syntax, Tree-sitter and LSP output.
 
-Runtime modules live in `runtime/<name>.cf` and define reusable actions. Lua code
-loads them by logical name:
+## Theme layout and fallback
 
-```lua
-local hl = require("cf.hl.setup")
-local r = hl.runtime("mystyleactions")
+Only two theme-module filenames are reserved by ChromaFlow:
 
-r.apply(hl.language.lua.variable, r.g.dim)
-r.replace(hl.language.lua.function, r.g.focus)
-r.reset(hl.language.lua.variable)
-r.clear(hl.language.lua.function)
-```
+| Reserved file | Purpose |
+| --- | --- |
+| `color.cf` | Palette |
+| `config.cf` | Theme-wide configuration |
 
-Runtime state is a sparse layer over the normal theme; it is recomposed against
-the new base after theme reloads instead of keeping a second full theme cache.
-Timed runtime functions are supported as explicit runtime pipeline operations.
-See [Runtime modules](README/RUNTIME.md).
+All other `.cf` module filenames are free. Names such as `generic.cf`,
+`lang-lua.cf`, `plugin-telescope.cf`, `core-ui.cf` or files below `runtime/` are
+conventions/examples only; the module kind comes from the module itself, not from
+its filename.
 
-## Picker and saving
+[`examples/themes/dark`](examples/themes/dark/) is the complete reference theme.
+Smaller bundled themes exercise active/default fallback and target selection.
 
-With `picker = true`, `:CFPick` inspects the semantic highlight under the cursor
-and can edit Style, TypeMods and colour pipelines with live runtime preview.
-Confirmed edits remain runtime-only until `:CFSave` rewrites the owning `*.cf`
-source and performs the normal theme reload.
-
-`CFSave` validates the generated Lua before replacing files and refuses stale
-source snapshots. Source persistence requires the Lua Tree-sitter parser. See
-[Picker and CFSave](README/PICKER.md).
-
-## Commands
+## Useful commands
 
 | Command | Purpose |
 | --- | --- |
-| `:CFTheme` | Open the theme menu. |
-| `:CFTheme <name> [default=true]` | Select a theme; optionally make it the fallback too. |
-| `:CFReload` | Compile and fully re-apply the selected theme. |
-| `:CFPick` | Open the semantic picker when `picker=true`. |
-| `:CFSave` | Persist confirmed picker edits when `picker=true`. |
-| `:CFApply` / `:CFReplace` | Apply a runtime action from the command line. |
-| `:CFReset` / `:CFClear` | Remove or clear a runtime target override. |
-| `:LineBlendToggle` | Toggle LineBlend. |
-| `:LineBlend <0..100>` | Change the LineBlend amount. |
-| `:LineBlendReload` | Explicitly rebuild LineBlend's generated state. |
+| `:CFReload` | Reload the selected theme |
+| `:CFPick` | Edit the target under the cursor |
+| `:CFSave` | Persist confirmed picker edits |
+| `:CFTheme` | Open the theme menu |
+| `:CFTheme <name>` | Select a theme |
+| `:CFTheme <name> default=true` | Select a theme and make it the default |
+| `:LineBlendToggle` | Toggle LineBlend |
+| `:LineBlend <0..100>` | Set the LineBlend amount |
+| `:LineBlendReload` | Hard-reload LineBlend state |
 
-## Reference themes
+Runtime modules additionally expose `:CFApply`, `:CFReplace`, `:CFReset` and
+`:CFClear`.
 
-`examples/themes/dark/` is the complete integration/reference theme. It covers
-language, UI and plugin modules; Vim/Tree-sitter/LSP targets; semantic aliases;
-TypeMods; TS-only captures; pipelines; links; runtime modules and fallback
-behavior. The sibling `fallback`, `palette` and `ts-only` themes demonstrate the
-three main fallback/target-policy cases.
+## Snippets
 
-Start with [examples/themes/README.md](examples/themes/README.md), then use the
-actual `*.cf` files as executable examples.
+With LuaSnip available, ChromaFlow registers starter snippets for real `.cf` files:
+`language`, `plugin`, `ui` and `runtime`, plus smaller group/link helpers.
+
+An unnamed buffer is not a `.cf` file yet; save it with a `.cf` filename before
+expecting the snippets to appear.
+
+## Performance, tests and benchmarks
+
+Performance is a design requirement, not an afterthought. Resolver caches, style
+interning/deduplication, early exits and hot-path allocation behaviour are part of
+the architecture.
+
+As a concrete reference rather than a promise, the checked-in clean-state report
+uses an Intel i5-10310U and the bundled `dark` theme (32 modules, 938 compiled
+actions). In the run with a real Lua buffer open, average `cf.reload()` time was
+about **12.8 ms** in the Minimal setup and **23.1 ms** with Picker + ColorTrace
+enabled. The full distributions and host details are kept under `tests/` so local
+results can be compared against the same workload.
+
+The canonical benchmark files are:
+
+```text
+tests/full_benchmark.lua
+tests/benchmark.lua
+tests/benchmark.md
+```
+
+`full_benchmark.lua` covers end-to-end theme operations, source loading, DSL
+compilation, resolver cold/hot paths, colour/pipeline work, apply/consumer work,
+runtime/picker/LineBlend/watcher paths, diagnostics/ColorTrace and float rendering.
+It runs separate Minimal, Picker, ColorTrace and Picker+ColorTrace scenarios.
+
+The benchmark engine reports `min`, `avg`, `p50`, `p90`, `p95`, `p99` and `max`,
+with batched measurements normalized back to time per real call. See
+[`tests/benchmark.md`](tests/benchmark.md) for the measurement model.
+
+The `tests/` directory also contains headless regression tests for the resolver,
+theme compiler, picker/save flow, runtime state, diagnostics, ColorTrace,
+LineBlend, theme selection and reference themes.
 
 ## Documentation
 
-- [Configuration and commands](README/CONFIGURATION.md)
-- [Theme layout, selection, fallback and reload](README/THEMES.md)
-- [DSL reference](README/DSL.md)
-- [Runtime modules](README/RUNTIME.md)
-- [Picker and CFSave](README/PICKER.md)
+The chapter map near the top of this README is the recommended reading order. The
+repository also contains practical reference material:
+
+- [`examples/themes/README.md`](examples/themes/README.md) — theme/fallback layout;
+- [`examples/themes/dark/README.md`](examples/themes/dark/README.md) — semantic reference theme;
+- [`examples/showcase/`](examples/showcase/) — theme-design playgrounds;
+- [`tests/clean_state_benchmark_report_20260930-1045.md`](tests/clean_state_benchmark_report_20260930-1045.md) — checked-in clean-state performance reference;
+- [`tests/benchmark.md`](tests/benchmark.md) — benchmark engine and methodology;
+- [`luals/library/cf/`](luals/library/cf/) — current LuaLS API metadata.
