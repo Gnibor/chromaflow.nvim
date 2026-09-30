@@ -116,9 +116,7 @@ require("cf").setup({
 })
 ```
 
-This loads the bundled reference theme directly, so you can immediately try commands
-such as `:CFPick`, `:CFTheme`, `:CFReload`, ColorTrace, and LineBlend. When you are
-ready to create your own theme, point `theme_path` at your own theme root instead.
+This loads the bundled reference theme directly, so you can immediately try commands such as :CFPick, :CFTheme, and :CFReload, as well as features such as ColorTrace and LineBlend. When you are ready to create your own theme, point `theme_path` at your own theme root instead.
 
 ### Configure your own theme root
 
