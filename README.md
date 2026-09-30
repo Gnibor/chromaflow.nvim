@@ -2,9 +2,7 @@
 
 [Why ChromaFlow](#why-chromaflow) · [How it fits together](#how-the-pieces-fit) · [Install](#installation-and-setup) · [Minimal theme](#minimal-theme) · [CFPick](#theme-design-with-cfpick) · [Commands](#useful-commands) · [Performance](#performance-tests-and-benchmarks) · [Documentation](#documentation)
 
-ChromaFlow is a fast, programmable theme engine for Neovim. Themes are split into
-small Lua-based `.cf` modules, compiled into reusable styles and resolved across
-Vim syntax, Tree-sitter and LSP semantic highlights.
+**ChromaFlow** replaces massive, static color tables with a highly optimized Lua-based compiler, a live in-buffer preview editor, and real-time color pipeline transformations.
 
 ## Why ChromaFlow
 
@@ -272,3 +270,13 @@ repository also contains practical reference material:
 - [`tests/clean_state_benchmark_report_20260930-1045.md`](tests/clean_state_benchmark_report_20260930-1045.md) — checked-in clean-state performance reference;
 - [`tests/benchmark.md`](tests/benchmark.md) — benchmark engine and methodology;
 - [`luals/library/cf/`](luals/library/cf/) — current LuaLS API metadata.
+
+
+## Current status & contributions
+
+ChromaFlow is stable, fully functional, and ready for daily theme authoring. The core engine, resolver, picker, and runtime layers are feature-complete. 
+
+Please note:
+- **Passive Maintenance:** Due to long-term personal health reasons, this repository is maintained passively and irregularly. Issues might remain open for a long time or receive no direct replies.
+- **Known Quirks:** There are still a few minor bugs and edge cases under the hood that do not affect the main theme compilation or picker workflows. 
+- **Contributions welcome:** If you find a bug or want to help add small features, pull requests are highly appreciated. If the project grows and stable maintainers step up, I am open to handing over co-maintenance.
