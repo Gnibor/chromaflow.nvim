@@ -1,7 +1,0 @@
-local hl = require("cf.hl.setup")
-local p = hl.plugin
-
--- ChatProtokoll derives its bubble groups from Normal/Visual/Pmenu/CursorLine,
--- Comment and Title at render time. Keep that behavior and let the core UI
--- palette remain the single source of truth.
-return p.setup("chatprotokoll", {})

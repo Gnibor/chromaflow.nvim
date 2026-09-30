@@ -1,6 +1,6 @@
 # ChromaFlow / cf.nvim
 
-[Why ChromaFlow](#why-chromaflow) · [How it fits together](#how-the-pieces-fit) · [Install](#installation-and-setup) · [Minimal theme](#minimal-theme) · [CFPick](#theme-design-with-cfpick) · [Commands](#useful-commands) · [Performance](#performance-tests-and-benchmarks) · [Documentation](#documentation)
+[Why ChromaFlow](#why-chromaflow) · [How it fits together](#how-the-pieces-fit) · [Install](#installation-and-setup) · [Quick try](#quick-try-with-the-bundled-theme) · [Minimal theme](#minimal-theme) · [CFPick](#theme-design-with-cfpick) · [Commands](#useful-commands) · [Performance](#performance-tests-and-benchmarks) · [Documentation](#documentation)
 
 **ChromaFlow** replaces massive, static color tables with a highly optimized Lua-based compiler, a live in-buffer preview editor, and real-time color pipeline transformations.
 
@@ -90,6 +90,34 @@ With `lazy.nvim` / LazyVim:
 ```lua
 return { "Gnibor/chromaflow.nvim" }
 ```
+
+### Quick try with the bundled theme
+
+If you want to try ChromaFlow before creating your own theme root, the repository
+ships with the complete `examples/themes/dark` reference theme. Its installation
+location does not matter: Neovim can find it through the plugin's `runtimepath`.
+
+Use this setup instead of a custom `theme_path`:
+
+```lua
+local marker = vim.api.nvim_get_runtime_file(
+  "examples/themes/.cf-theme",
+  false
+)[1]
+
+assert(marker, "ChromaFlow example theme not found")
+
+require("cf").setup({
+  theme_path = vim.fs.dirname(marker),
+  picker = true,
+})
+```
+
+This loads the bundled reference theme directly, so you can immediately try commands
+such as `:CFPick`, `:CFTheme`, `:CFReload`, ColorTrace, and LineBlend. When you are
+ready to create your own theme, point `theme_path` at your own theme root instead.
+
+### Configure your own theme root
 
 Then configure ChromaFlow:
 
