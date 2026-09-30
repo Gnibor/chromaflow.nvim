@@ -44,7 +44,7 @@ color.cf + config.cf + .cf modules
                 v
         Neovim highlights
 
-runtime modules  -> sparse live overrides
+runtime modules   -> sparse live overrides
 CFPick / CFSave   -> inspect compiled ownership, preview, persist source edits
 ColorTrace        -> explain pipeline color transformations in source
 LineBlend         -> keep CursorLine visible across styles with backgrounds
