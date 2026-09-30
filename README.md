@@ -110,6 +110,9 @@ assert(marker, "ChromaFlow example theme not found")
 require("cf").setup({
   theme_path = vim.fs.dirname(marker),
   picker = true,
+  diagnostics = {
+    color_trace = true,
+  },
 })
 ```
 
