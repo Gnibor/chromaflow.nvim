@@ -1,6 +1,6 @@
 # ChromaFlow / cf.nvim
 
-[Why ChromaFlow](#why-chromaflow) · [How it fits together](#how-the-pieces-fit) · [Install](#installation-and-setup) · [Quick try](#quick-try-with-the-bundled-theme) · [Minimal theme](#minimal-theme) · [CFPick](#theme-design-with-cfpick) · [Commands](#useful-commands) · [Performance](#performance-tests-and-benchmarks) · [Documentation](#documentation)
+[Why ChromaFlow](#why-chromaflow) · [How it fits together](#how-the-pieces-fit) · [Install](#installation-and-setup) · [Quick try](#quick-try-with-the-bundled-theme) · [LSD demo](#lsd-runtime-demo) · [Minimal theme](#minimal-theme) · [CFPick](#theme-design-with-cfpick) · [Commands](#useful-commands) · [Performance](#performance-tests-and-benchmarks) · [Documentation](#documentation)
 
 **ChromaFlow** replaces massive, static color tables with a highly optimized Lua-based compiler, a live in-buffer preview editor, and real-time color pipeline transformations.
 
@@ -117,6 +117,26 @@ require("cf").setup({
 ```
 
 This loads the bundled reference theme directly, so you can immediately try commands such as :CFPick, :CFTheme, and :CFReload, as well as features such as ColorTrace and LineBlend. When you are ready to create your own theme, point `theme_path` at your own theme root instead.
+
+### LSD runtime demo
+
+The bundled LSD runtime demo is opt-in. Request it once from your Neovim config:
+
+```lua
+require("cf.fn.runtime").runtime("lsd")
+```
+
+After the theme has loaded, two commands are available:
+
+```vim
+:LSD
+:LSDTheme
+```
+
+- `:LSD` runs the deliberately loud full-rainbow version.
+- `:LSDTheme` keeps the current theme's saturation/lightness and only rotates its hues.
+
+Run the same command again to disable the effect.
 
 ### Configure your own theme root
 
