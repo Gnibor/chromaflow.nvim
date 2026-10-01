@@ -1,34 +1,125 @@
--- runtime/lsd.cf
--- Deliberately loud runtime demo: every bound semantic type starts at a
--- different hue and then walks around the colour wheel.
+-- Runtime LSP semantic-token demo.
+-- :LSD reads the semantic token types that are actually present in the current
+-- buffer and applies the colour-wave directly to their concrete Neovim
+-- @lsp.type.<type>.<filetype> highlight groups.
 local hl = require("cf.hl.setup")
-local color = require("cf.color")
-local c = hl.colors
-local r = hl.runtime
+local r = hl.runtime("lsd")
 
-local tick = 40
 local phase_count = 22
-local degrees_per_frame = 3
+local enabled = false
+local active_targets = {}
 
-function r.colorfade(style, ctx)
-	local shift = (ctx.frame * degrees_per_frame) % 360
-	if style.fg ~= nil then
-		style.fg = color.shiftHue(style.fg, shift)
+local function token_types(bufnr)
+	local seen = {}
+	local out = {}
+	local text_document = vim.lsp.util.make_text_document_params(bufnr)
+	local clients = vim.lsp.get_clients({ bufnr = bufnr })
+
+	local function collect(client, method, params)
+		local response = client:request_sync(method, params, 1000, bufnr)
+		local result = response and response.result
+		local data = result and result.data
+		local provider = client.server_capabilities.semanticTokensProvider
+		local legend = provider and provider.legend
+		local types = legend and legend.tokenTypes
+
+		if type(data) ~= "table" or type(types) ~= "table" then
+			return
+		end
+
+		-- SemanticTokens.data is a flat sequence of 5-tuples:
+		-- deltaLine, deltaStart, length, tokenType, tokenModifiers.
+		for i = 1, #data, 5 do
+			local type_index = data[i + 3]
+			local token_type = type(type_index) == "number" and types[type_index + 1] or nil
+			if token_type and not seen[token_type] then
+				seen[token_type] = true
+				out[#out + 1] = token_type
+			end
+		end
 	end
-	if style.ctermfg ~= nil then
-		style.ctermfg = color.to_cterm(color.shiftHue(color.from_cterm(style.ctermfg), shift))
+
+	for i = 1, #clients do
+		local client = clients[i]
+
+		if client:supports_method("textDocument/semanticTokens/full", bufnr) then
+			collect(client, "textDocument/semanticTokens/full", {
+				textDocument = text_document,
+			})
+		elseif client:supports_method("textDocument/semanticTokens/range", bufnr) then
+			local line_count = vim.api.nvim_buf_line_count(bufnr)
+			local last_line = vim.api.nvim_buf_get_lines(
+				bufnr,
+				math.max(line_count - 1, 0),
+				line_count,
+				false
+			)[1] or ""
+
+			local params = vim.lsp.util.make_given_range_params(
+				{ 1, 0 },
+				{ line_count, #last_line },
+				bufnr,
+				client.offset_encoding
+			)
+
+			collect(client, "textDocument/semanticTokens/range", params)
+		end
 	end
-	return style
+
+	return out
 end
 
-local groups = {}
-for i = 1, phase_count do
-	local start = color.shiftHue(c.red, ((i - 1) * 360) / phase_count)
-	groups[i] = r:group(("colorfade_%02d"):format(i), {
-		fg = start,
-		ctermfg = color.to_cterm(start),
-		pipeline = { r:func("colorfade")[tick] },
-	})
+local function reset_active()
+	for i = 1, #active_targets do
+		r.reset(active_targets[i])
+	end
+	active_targets = {}
 end
 
-return r.setup(groups)
+local function set_enabled(value)
+	if not value then
+		reset_active()
+		enabled = false
+		return
+	end
+
+	local bufnr = vim.api.nvim_get_current_buf()
+	local filetype = vim.bo[bufnr].filetype
+	local types = token_types(bufnr)
+
+	if filetype == "" or #types == 0 then
+		vim.notify("LSD: no LSP semantic token types found in the current buffer", vim.log.levels.WARN)
+		return
+	end
+
+	reset_active()
+
+	for i = 1, #types do
+		local group = ("@lsp.type.%s.%s"):format(types[i], filetype)
+
+		-- Neovim materializes these concrete groups as semantic tokens are used.
+		-- Runtime raw targets deliberately work with existing Neovim highlights,
+		-- so the demo does not depend on which semantic groups the theme owns.
+		if vim.fn.hlexists(group) == 1 then
+			local target = hl.raw[group]
+			local phase = ((i - 1) % phase_count) + 1
+			r.apply(target, r.g[("colorfade_%02d"):format(phase)])
+			active_targets[#active_targets + 1] = target
+		end
+	end
+
+	if #active_targets == 0 then
+		vim.notify("LSD: no materialized LSP type highlights found in the current buffer", vim.log.levels.WARN)
+		return
+	end
+
+	enabled = true
+end
+
+pcall(vim.api.nvim_del_user_command, "LSD")
+vim.api.nvim_create_user_command("LSD", function()
+	set_enabled(not enabled)
+end, {
+	nargs = 0,
+	desc = "Toggle the ChromaFlow runtime LSP colour-wave demo",
+})
