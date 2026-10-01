@@ -1,12 +1,20 @@
--- Runtime LSP semantic-token demo.
--- :LSD reads the semantic token types that are actually present in the current
--- buffer and applies the colour-wave directly to their concrete Neovim
--- @lsp.type.<type>.<filetype> highlight groups.
+-- runtime/lsd.cf
+-- Generalized LSP semantic-token LSD demo.
+--
+-- :LSD      -> loud full-rainbow version, matching the original runtime demo
+-- :LSDTheme -> theme-relative hue rotation, preserving the current theme's
+--              saturation/lightness character
 local hl = require("cf.hl.setup")
-local r = hl.runtime("lsd")
+local color = require("cf.color")
+local runtime = require("cf.fn.runtime")
+local c = hl.colors
+local r = hl.runtime
 
 local phase_count = 22
-local enabled = false
+local tick_ms = 40
+local degrees_per_frame = 3
+
+local active_mode = nil
 local active_targets = {}
 
 local function token_types(bufnr)
@@ -27,11 +35,10 @@ local function token_types(bufnr)
 			return
 		end
 
-		-- SemanticTokens.data is a flat sequence of 5-tuples:
-		-- deltaLine, deltaStart, length, tokenType, tokenModifiers.
 		for i = 1, #data, 5 do
 			local type_index = data[i + 3]
 			local token_type = type(type_index) == "number" and types[type_index + 1] or nil
+
 			if token_type and not seen[token_type] then
 				seen[token_type] = true
 				out[#out + 1] = token_type
@@ -71,15 +78,16 @@ end
 
 local function reset_active()
 	for i = 1, #active_targets do
-		r.reset(active_targets[i])
+		runtime.reset(active_targets[i])
 	end
+
 	active_targets = {}
+	active_mode = nil
 end
 
-local function set_enabled(value)
-	if not value then
+local function set_mode(mode)
+	if active_mode == mode then
 		reset_active()
-		enabled = false
 		return
 	end
 
@@ -88,38 +96,112 @@ local function set_enabled(value)
 	local types = token_types(bufnr)
 
 	if filetype == "" or #types == 0 then
-		vim.notify("LSD: no LSP semantic token types found in the current buffer", vim.log.levels.WARN)
+		vim.notify(
+			"LSD: no LSP semantic token types found in the current buffer",
+			vim.log.levels.WARN
+		)
 		return
 	end
 
 	reset_active()
 
+	local prefix = mode == "theme" and "themefade" or "colorfade"
+
 	for i = 1, #types do
 		local group = ("@lsp.type.%s.%s"):format(types[i], filetype)
 
-		-- Neovim materializes these concrete groups as semantic tokens are used.
-		-- Runtime raw targets deliberately work with existing Neovim highlights,
-		-- so the demo does not depend on which semantic groups the theme owns.
 		if vim.fn.hlexists(group) == 1 then
 			local target = hl.raw[group]
 			local phase = ((i - 1) % phase_count) + 1
-			r.apply(target, r.g[("colorfade_%02d"):format(phase)])
+
+			runtime.apply(
+				target,
+				r.g[("%s_%02d"):format(prefix, phase)]
+			)
+
 			active_targets[#active_targets + 1] = target
 		end
 	end
 
 	if #active_targets == 0 then
-		vim.notify("LSD: no materialized LSP type highlights found in the current buffer", vim.log.levels.WARN)
+		vim.notify(
+			"LSD: no materialized LSP type highlights found in the current buffer",
+			vim.log.levels.WARN
+		)
 		return
 	end
 
-	enabled = true
+	active_mode = mode
 end
 
 pcall(vim.api.nvim_del_user_command, "LSD")
 vim.api.nvim_create_user_command("LSD", function()
-	set_enabled(not enabled)
+	set_mode("loud")
 end, {
 	nargs = 0,
-	desc = "Toggle the ChromaFlow runtime LSP colour-wave demo",
+	desc = "Toggle the loud ChromaFlow LSP colour-wave demo",
 })
+
+pcall(vim.api.nvim_del_user_command, "LSDTheme")
+vim.api.nvim_create_user_command("LSDTheme", function()
+	set_mode("theme")
+end, {
+	nargs = 0,
+	desc = "Toggle the theme-relative ChromaFlow LSP colour-wave demo",
+})
+
+-- Original loud runtime effect.
+function r.colorfade(style, ctx)
+	local shift = (ctx.frame * degrees_per_frame) % 360
+
+	if style.fg ~= nil then
+		style.fg = color.shiftHue(style.fg, shift)
+	end
+
+	if style.ctermfg ~= nil then
+		style.ctermfg = color.to_cterm(
+			color.shiftHue(color.from_cterm(style.ctermfg), shift)
+		)
+	end
+
+	return style
+end
+
+-- Current theme-relative variant.
+function r.themefade(style, ctx)
+	if style.fg ~= nil then
+		style.fg = color.shiftHue(style.fg, ctx.frame * degrees_per_frame)
+	end
+
+	return style
+end
+
+local runtime_groups = {}
+local phase_step = 360 / phase_count
+
+for i = 1, phase_count do
+	local phase = (i - 1) * phase_step
+
+	-- Original behaviour: replace the starting foreground with evenly spaced
+	-- hues derived from c.red, then animate around the colour wheel.
+	local start = color.shiftHue(c.red, phase)
+
+	runtime_groups[#runtime_groups + 1] = r:group(("colorfade_%02d"):format(i), {
+		fg = start,
+		ctermfg = color.to_cterm(start),
+		pipeline = {
+			r:func("colorfade")[tick_ms],
+		},
+	})
+
+	-- Theme-relative behaviour: keep the theme's own saturation/lightness and
+	-- only rotate its hue before applying the animated shift.
+	runtime_groups[#runtime_groups + 1] = r:group(("themefade_%02d"):format(i), {
+		pipeline = {
+			hl.shiftHue.fg(phase),
+			r:func("themefade")[tick_ms],
+		},
+	})
+end
+
+return r.setup(runtime_groups)
